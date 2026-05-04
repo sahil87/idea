@@ -959,6 +959,75 @@ func TestEdit_PreservesStatus(t *testing.T) {
 	}
 }
 
+func TestAdd_FileWithoutTrailingNewline(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "backlog.md")
+	// Existing file has NO trailing newline.
+	if err := os.WriteFile(path, []byte("- [ ] [a7k2] 2025-06-15: Existing"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Add(path, "New idea", "b1c2", "2025-07-01"); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	got := string(data)
+	if !strings.Contains(got, "- [ ] [a7k2] 2025-06-15: Existing\n- [ ] [b1c2]") {
+		t.Errorf("new entry should start on a fresh line, got:\n%s", got)
+	}
+}
+
+func TestLoadFile_PreservesTrailingBlankLines(t *testing.T) {
+	dir := t.TempDir()
+	// Two trailing newlines means there's a blank line at EOF.
+	content := "- [ ] [a7k2] 2025-06-15: Add dark mode\n\n"
+	path := writeBacklog(t, dir, content)
+
+	f, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if err := SaveFile(f, path); err != nil {
+		t.Fatalf("SaveFile: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	if string(data) != content {
+		t.Errorf("round-trip should preserve trailing blank lines\ngot:  %q\nwant: %q", string(data), content)
+	}
+}
+
+func TestEdit_EmptyTextRejected(t *testing.T) {
+	dir := t.TempDir()
+	content := `- [ ] [a7k2] 2025-06-15: Add dark mode
+`
+	path := writeBacklog(t, dir, content)
+
+	_, err := Edit(path, "a7k2", "", "", "")
+	if err == nil {
+		t.Fatal("expected error for empty text")
+	}
+	if !strings.Contains(err.Error(), "text is required") {
+		t.Errorf("error = %q, want 'text is required'", err.Error())
+	}
+}
+
+func TestList_InvalidSortField(t *testing.T) {
+	dir := t.TempDir()
+	content := `- [ ] [a7k2] 2025-06-15: Add dark mode
+`
+	path := writeBacklog(t, dir, content)
+
+	_, err := List(path, FilterAll, "data", false)
+	if err == nil {
+		t.Fatal("expected error for invalid sort field")
+	}
+	if !strings.Contains(err.Error(), "invalid sort field") {
+		t.Errorf("error = %q, want 'invalid sort field'", err.Error())
+	}
+}
+
 func TestList_EmptyResult(t *testing.T) {
 	dir := t.TempDir()
 	content := `- [ ] [a7k2] 2025-06-15: Open one

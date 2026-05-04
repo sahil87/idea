@@ -37,7 +37,7 @@ The backlog file path can also be overridden globally by `--file <path>` (relati
 | `idea done <query>` | Mark an idea as done |
 | `idea reopen <query>` | Reopen a completed idea |
 | `idea edit <query> "text"` | Modify an idea's text |
-| `idea rm <query>` | Delete an idea |
+| `idea rm <query> --force` | Delete an idea (requires `--force` to confirm) |
 
 ## ID Format & Query Semantics
 

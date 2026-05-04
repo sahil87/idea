@@ -151,8 +151,12 @@ func LoadFile(path string) (*File, error) {
 		return f, nil
 	}
 
-	// Trim trailing newline to avoid a spurious empty last line
-	content = strings.TrimRight(content, "\n")
+	// Trim a single trailing newline (the canonical EOF newline) so that a
+	// well-formed file does not produce a spurious empty last line. Multiple
+	// trailing newlines are preserved verbatim per Constitution Principle I.
+	if strings.HasSuffix(content, "\n") {
+		content = content[:len(content)-1]
+	}
 	rawLines := strings.Split(content, "\n")
 
 	for i, line := range rawLines {
@@ -169,6 +173,9 @@ func LoadFile(path string) (*File, error) {
 }
 
 // SaveFile writes the backlog file, reconstructing from preserved lines and ideas.
+// The write is atomic: content is written to a temp file in the same directory
+// and then renamed over the target path, so a crash mid-write cannot leave the
+// backlog (the source of truth) partially written or empty.
 func SaveFile(f *File, path string) error {
 	// Rebuild lines
 	result := make([]string, len(f.lines))
@@ -179,7 +186,41 @@ func SaveFile(f *File, path string) error {
 	}
 
 	content := strings.Join(result, "\n") + "\n"
-	return os.WriteFile(path, []byte(content), 0644)
+	return atomicWriteFile(path, []byte(content), 0644)
+}
+
+// atomicWriteFile writes data to path atomically by writing to a temp file
+// in the same directory and renaming it over the destination. The temp file
+// is cleaned up on any error path before returning.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".idea-tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	cleanup := func() { _ = os.Remove(tmpPath) }
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		cleanup()
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+	return nil
 }
 
 // ResolveFilePath determines the backlog file path.
@@ -337,12 +378,44 @@ func Add(path, text, customID, customDate string) (Idea, error) {
 	}
 	defer f.Close()
 
+	// If the existing file does not end with a newline, prepend one so the
+	// new entry starts on a fresh line instead of being glued to the previous
+	// content. Determine this by stat-ing the file and reading the last byte.
+	if needsLeadingNewline, err := lastByteIsNewline(path); err == nil && !needsLeadingNewline {
+		if _, err := f.WriteString("\n"); err != nil {
+			return Idea{}, fmt.Errorf("write separator: %w", err)
+		}
+	}
+
 	_, err = fmt.Fprintln(f, FormatLine(idea))
 	if err != nil {
 		return Idea{}, fmt.Errorf("write idea: %w", err)
 	}
 
 	return idea, nil
+}
+
+// lastByteIsNewline returns true when the file at path is empty or its last
+// byte is '\n'. It returns false when the file ends with any other byte.
+// An error is returned only when the file cannot be inspected at all.
+func lastByteIsNewline(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	if info.Size() == 0 {
+		return true, nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	buf := make([]byte, 1)
+	if _, err := f.ReadAt(buf, info.Size()-1); err != nil {
+		return false, err
+	}
+	return buf[0] == '\n', nil
 }
 
 func generateUniqueID(path string, maxRetries int) (string, error) {
@@ -377,7 +450,13 @@ func checkIDCollision(path, id string) error {
 }
 
 // List returns ideas filtered, sorted, and optionally formatted as JSON.
+// sortField must be "id" or "date"; any other value is rejected so typos like
+// `--sort=data` fail loudly instead of silently falling through to date order.
 func List(path string, filter FilterKind, sortField string, reverse bool) ([]Idea, error) {
+	if sortField != "id" && sortField != "date" {
+		return nil, fmt.Errorf("invalid sort field %q: must be 'id' or 'date'", sortField)
+	}
+
 	f, err := LoadFile(path)
 	if err != nil {
 		return nil, err
@@ -463,6 +542,10 @@ func Reopen(path, query string) (Idea, error) {
 
 // Edit modifies a single matching idea's text, and optionally its ID and date.
 func Edit(path, query, newText, newID, newDate string) (Idea, error) {
+	if newText == "" {
+		return Idea{}, fmt.Errorf("text is required")
+	}
+
 	f, err := LoadFile(path)
 	if err != nil {
 		return Idea{}, err
