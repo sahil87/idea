@@ -13,3 +13,5 @@
 
 | Spec | Description |
 |------|-------------|
+| [overview.md](overview.md) | idea CLI overview — purpose, commands, worktree behavior |
+| [backlog-format.md](backlog-format.md) | Backlog file line format — public contract for `fab/backlog.md` |
