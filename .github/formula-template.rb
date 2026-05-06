@@ -26,6 +26,8 @@ class Idea < Formula
     end
   end
 
+  link_overwrite "bin/idea"
+
   def install
     bin.install "idea"
   end
