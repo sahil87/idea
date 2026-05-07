@@ -2,6 +2,8 @@
 
 > Part of [@sahil87's open source toolkit](https://ai.shll.in) — see all projects there.
 
+[![Latest release](https://img.shields.io/github/v/release/sahil87/idea)](https://github.com/sahil87/idea/releases) [![Downloads](https://img.shields.io/github/downloads/sahil87/idea/total)](https://github.com/sahil87/idea/releases) [![Stars](https://img.shields.io/github/stars/sahil87/idea?style=social)](https://github.com/sahil87/idea/stargazers)
+
 Capture and manage ideas from the command line. A worktree-aware backlog tracker that keeps `fab/backlog.md` as the source of truth.
 
 ## Install
