@@ -6,4 +6,4 @@
 | Domain | Description | Memory Files |
 |--------|-------------|------|
 | release | Tag-driven release pipeline (release.sh + GitHub Actions + Homebrew tap) | [release/pipeline.md](release/pipeline.md) |
-| cli | CLI source structure (cmd/idea + internal/idea + version wiring) | [cli/structure.md](cli/structure.md) |
+| cli | CLI source structure (cmd/idea + internal/idea + version wiring) and per-subcommand notes | [cli/structure.md](cli/structure.md), [cli/update.md](cli/update.md) |
