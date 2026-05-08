@@ -12,6 +12,7 @@
 package idea
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -64,12 +65,18 @@ func Update(currentVersion string, out, errOut io.Writer) error {
 	fmt.Fprintln(out, "Checking for updates...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), brewUpdateTimeout)
-	err := exec.CommandContext(ctx, "brew", "update", "--quiet").Run()
+	updateCmd := exec.CommandContext(ctx, "brew", "update", "--quiet")
+	var updateStderr bytes.Buffer
+	updateCmd.Stderr = &updateStderr
+	err := updateCmd.Run()
 	cancel()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			fmt.Fprintln(errOut, "idea update: brew not found on PATH.")
 			return err
+		}
+		if detail := strings.TrimSpace(updateStderr.String()); detail != "" {
+			return fmt.Errorf("brew update failed: %w: %s", err, detail)
 		}
 		return fmt.Errorf("brew update failed: %w", err)
 	}
@@ -79,6 +86,12 @@ func Update(currentVersion string, out, errOut io.Writer) error {
 		if errors.Is(err, exec.ErrNotFound) {
 			fmt.Fprintln(errOut, "idea update: brew not found on PATH.")
 			return err
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			if detail := strings.TrimSpace(string(exitErr.Stderr)); detail != "" {
+				return fmt.Errorf("could not determine latest version: %w: %s", err, detail)
+			}
 		}
 		return fmt.Errorf("could not determine latest version: %w", err)
 	}

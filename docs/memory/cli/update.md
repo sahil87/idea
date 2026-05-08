@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Users invoke `idea update` to refresh their local install to the latest release. The command is a thin wrapper around `brew update --quiet` + `brew info --json=v2 sahil87/tap/idea` + `brew upgrade sahil87/tap/idea`. There is no auto-update on every invocation, no scheduled background check, and no telemetry — the user explicitly opts in by running the subcommand. For non-Homebrew installs (manual `scripts/install.sh`, package managers other than Homebrew, raw `go build` outputs), the command prints a one-line hint pointing back at the tap and exits 0 without attempting an upgrade.
+Users invoke `idea update` to refresh their local install to the latest release. The command is a thin wrapper around `brew update --quiet` + `brew info --json=v2 sahil87/tap/idea` + `brew upgrade sahil87/tap/idea`. There is no auto-update on every invocation, no scheduled background check, and no telemetry — the user explicitly opts in by running the subcommand. For non-Homebrew installs (manual `scripts/install.sh`, package managers other than Homebrew, raw `go build` outputs), the command prints a two-line hint (the current version note plus a `brew install sahil87/tap/idea` reinstall pointer) and exits 0 without attempting an upgrade.
 
 ## Homebrew detection
 
