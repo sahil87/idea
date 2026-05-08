@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -13,6 +14,11 @@ var mainFlag bool
 
 // version is the binary version, overridden via -ldflags "-X main.version=..." at build time.
 var version = "dev"
+
+// errSilent is a sentinel returned from a subcommand's RunE when the command
+// has already written a user-facing error message itself. The top-level error
+// handler in main exits non-zero without printing anything additional.
+var errSilent = errors.New("silent")
 
 func main() {
 	root := &cobra.Command{
@@ -50,10 +56,13 @@ Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 		reopenCmd(),
 		editCmd(),
 		rmCmd(),
+		updateCmd(),
 	)
 
 	if err := root.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+		if !errors.Is(err, errSilent) {
+			fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+		}
 		os.Exit(1)
 	}
 }

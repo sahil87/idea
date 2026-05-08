@@ -11,12 +11,14 @@ src/
   cmd/
     idea/                      # cobra entry point; one file per subcommand
       main.go
-      add.go list.go show.go done.go reopen.go edit.go rm.go resolve.go
+      add.go list.go show.go done.go reopen.go edit.go rm.go resolve.go update.go
       main_test.go
   internal/
-    idea/                      # package logic (parsing, formatting, ID gen, file I/O, worktree resolution)
+    idea/                      # package logic (parsing, formatting, ID gen, file I/O, worktree resolution, self-update)
       idea.go
       idea_test.go
+      update.go
+      update_test.go
 ```
 
 The module path is `github.com/sahil87/idea` (matches the GitHub repo URL). Direct dependencies are limited to `github.com/spf13/cobra` plus the standard library, per the constitution's dependency-discipline principle.
@@ -70,4 +72,5 @@ This wiring is required because `idea` is released independently:
 ## Cross-references
 
 - Release pipeline that consumes this layout (build path, version stamping, Homebrew formula): `../release/pipeline.md`.
+- Self-update subcommand built on top of the Homebrew tap (`update.go` / `internal/idea/update.go`): `update.md`.
 - Constitution principles III and IV: `fab/project/constitution.md`.
