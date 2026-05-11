@@ -113,6 +113,8 @@ Why the default favors the current worktree: when you're heads-down on a change 
 3. **Start work** — `/fab-new <id>` (in your AI agent) pulls the description from the backlog and spins up a change folder + branch
 4. **Close** — `idea done <id>` after the change ships
 
+For bulk work, `fab batch new` reads every open idea and spawns a worktree + Claude session per item — the whole backlog becomes a parallel work queue in one command.
+
 The backlog format is a stable public contract — any tool that follows [`backlog-format.md`](docs/specs/backlog-format.md) can read or write the file without coupling to `idea`'s internals.
 
 ## Gotchas
