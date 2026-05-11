@@ -22,11 +22,13 @@ Homebrew tap:
 brew install sahil87/tap/idea
 ```
 
-Or build and install manually from a clean checkout:
+Or build and install manually from a clean checkout (requires Go and `just`):
 
 ```bash
-./scripts/install.sh
+just local-install
 ```
+
+Builds the binary and copies it to `~/.local/bin/idea`. Make sure that directory is on your `$PATH`.
 
 To upgrade later: `idea update` (self-upgrades via Homebrew).
 
