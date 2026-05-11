@@ -57,6 +57,7 @@ Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 		editCmd(),
 		rmCmd(),
 		updateCmd(),
+		newShellInitCmd(),
 	)
 
 	if err := root.Execute(); err != nil {
