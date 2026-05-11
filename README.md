@@ -32,6 +32,19 @@ Builds the binary and copies it to `~/.local/bin/idea`. Make sure that directory
 
 To upgrade later: `idea update` (self-upgrades via Homebrew).
 
+## Shell completion
+
+`idea shell-init <shell>` emits eval-safe tab-completion for your shell. Add this line to your rc file:
+
+```sh
+eval "$(idea shell-init zsh)"   # in ~/.zshrc
+eval "$(idea shell-init bash)"  # in ~/.bashrc
+```
+
+Supports `zsh`, `bash`, `fish`, and `powershell`. Tab-completes subcommands, flags, and the `idea <text>` shorthand.
+
+> 💡 Have other sahil87 tools? [`shll shell-install`](https://github.com/sahil87/shll#shll-shell-install--wire-the-rc-file-recommended) handles all of their shell integrations and autocompletions at once.
+
 ## Quick Start
 
 A typical capture-and-triage session:
