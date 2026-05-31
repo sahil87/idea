@@ -1,0 +1,15 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-05-31T05:19:28Z"}
+{"args":"Add a boolean --skip-brew-update flag to the update command. When set, skip ONLY the internal brew update tap-metadata refresh; brew info version check, up-to-date short-circuit, and brew upgrade unchanged. Default preserves current behavior exactly. Thread skipBrewUpdate bool through Update(); wire a cobra bool flag in cmd/idea/update.go. Add a test; do not refactor subprocess convention.","cmd":"fab-new","event":"command","ts":"2026-05-31T05:19:28Z"}
+{"delta":"+3.1","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-05-31T05:20:20Z"}
+{"delta":"+0.0","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-05-31T05:20:46Z"}
+{"cmd":"fab-new","event":"command","ts":"2026-05-31T05:21:10Z"}
+{"delta":"+1.6","event":"confidence","score":4.7,"trigger":"calc-score","ts":"2026-05-31T05:22:43Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"spec","ts":"2026-05-31T05:22:46Z"}
+{"cmd":"fab-clarify","event":"command","ts":"2026-05-31T05:23:19Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"tasks","ts":"2026-05-31T05:24:33Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-05-31T05:24:33Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-05-31T05:25:27Z"}
+{"action":"enter","driver":"fab-continue","event":"stage-transition","stage":"review","ts":"2026-05-31T05:27:13Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-05-31T05:30:14Z"}
+{"event":"review","result":"passed","ts":"2026-05-31T05:30:14Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-05-31T05:32:13Z"}

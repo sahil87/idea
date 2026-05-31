@@ -2,6 +2,9 @@ package idea
 
 import (
 	"bytes"
+	"context"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -34,7 +37,7 @@ func TestUpdateNonBrewInstall(t *testing.T) {
 		t.Skip("test binary appears to be brew-installed; non-brew code path not exercised")
 	}
 	var stdout, stderr bytes.Buffer
-	if err := Update("v0.0.3", &stdout, &stderr); err != nil {
+	if err := Update("v0.0.3", false, &stdout, &stderr); err != nil {
 		t.Fatalf("Update on non-brew install returned err: %v", err)
 	}
 	out := stdout.String()
@@ -58,4 +61,111 @@ func TestIsBrewInstalledReturnsBool(t *testing.T) {
 	// test` from a brew install of go it's still false (the *go* test binary
 	// lives under a temp dir, not /Cellar/). We just assert it doesn't crash.
 	_ = isBrewInstalled()
+}
+
+// TestHelperProcess is the canonical Go stdlib fake-exec target. It is not a
+// real test: when invoked normally it returns immediately. The recorder stub
+// re-executes the test binary with `-test.run=TestHelperProcess` and
+// GO_WANT_HELPER_PROCESS=1 so this body runs as a stand-in for `brew`.
+//
+// It inspects the original brew args (appended after a "--" separator) to fake
+// each subcommand: `brew info` prints valid `--json=v2` output with a stable
+// version that differs from the test's currentVersion (so the upgrade path is
+// taken); `brew update` / `brew upgrade` simply exit 0.
+func TestHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
+		return
+	}
+	// Args after "--" are the original brew args the recorder forwarded.
+	args := os.Args
+	for i, a := range args {
+		if a == "--" {
+			args = args[i+1:]
+			break
+		}
+	}
+	isInfo := false
+	for _, a := range args {
+		if a == "info" {
+			isInfo = true
+			break
+		}
+	}
+	if isInfo {
+		// Stable version 9.9.9 differs from the test's "v0.0.1" so the
+		// up-to-date short-circuit does NOT fire and the upgrade path runs.
+		os.Stdout.WriteString(`{"formulae":[{"versions":{"stable":"9.9.9"}}]}`)
+	}
+	os.Exit(0)
+}
+
+// newBrewRecorder returns a stub matching exec.CommandContext's signature. It
+// records the brew subcommand (the args after "brew") of each invocation into
+// *recorded and returns a command that re-runs the test binary's
+// TestHelperProcess, forwarding the original brew args after a "--" separator
+// so the helper can see which subcommand was requested.
+func newBrewRecorder(recorded *[]string) func(context.Context, string, ...string) *exec.Cmd {
+	return func(_ context.Context, name string, args ...string) *exec.Cmd {
+		// args[0] is the brew subcommand (update / upgrade / info).
+		if name == "brew" && len(args) > 0 {
+			*recorded = append(*recorded, args[0])
+		}
+		helperArgs := append([]string{"-test.run=TestHelperProcess", "--", name}, args...)
+		cmd := exec.Command(os.Args[0], helperArgs...)
+		cmd.Env = append(os.Environ(), "GO_WANT_HELPER_PROCESS=1")
+		return cmd
+	}
+}
+
+// TestUpdateSkipBrewUpdate drives Update down the brew path with the seam vars
+// stubbed and asserts which brew subcommands are spawned. With skip=false the
+// `brew update` refresh runs; with skip=true it is omitted, while `brew info`
+// and `brew upgrade` run in both cases.
+func TestUpdateSkipBrewUpdate(t *testing.T) {
+	tests := []struct {
+		name       string
+		skip       bool
+		wantUpdate bool
+	}{
+		{name: "flag absent runs brew update", skip: false, wantUpdate: true},
+		{name: "flag set skips brew update", skip: true, wantUpdate: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			origBrewInstalled := brewInstalled
+			origExecCommandContext := execCommandContext
+			defer func() {
+				brewInstalled = origBrewInstalled
+				execCommandContext = origExecCommandContext
+			}()
+
+			var recorded []string
+			brewInstalled = func() bool { return true }
+			execCommandContext = newBrewRecorder(&recorded)
+
+			var stdout, stderr bytes.Buffer
+			if err := Update("v0.0.1", tc.skip, &stdout, &stderr); err != nil {
+				t.Fatalf("Update returned err: %v\nstderr: %s", err, stderr.String())
+			}
+
+			has := func(sub string) bool {
+				for _, r := range recorded {
+					if r == sub {
+						return true
+					}
+				}
+				return false
+			}
+
+			if !has("info") {
+				t.Errorf("expected brew info to be invoked; recorded: %v", recorded)
+			}
+			if !has("upgrade") {
+				t.Errorf("expected brew upgrade to be invoked; recorded: %v", recorded)
+			}
+			if got := has("update"); got != tc.wantUpdate {
+				t.Errorf("brew update invoked = %v, want %v; recorded: %v", got, tc.wantUpdate, recorded)
+			}
+		})
+	}
 }

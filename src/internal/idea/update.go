@@ -36,10 +36,26 @@ const (
 	brewUpgradeTimeout = 120 * time.Second
 )
 
+// execCommandContext and brewInstalled are indirection seams for testing.
+// Production code uses exec.CommandContext and isBrewInstalled verbatim; tests
+// stub these package-level vars to record subprocess invocations and force the
+// brew code path. They are NOT a command-runner abstraction — os/exec remains
+// the mechanism (see Design Decision 1 in the change spec).
+var (
+	execCommandContext = exec.CommandContext
+	brewInstalled      = isBrewInstalled
+)
+
 // Update self-updates the idea binary via Homebrew.
 //
 // currentVersion is the binary's reported version (e.g. "v0.0.3"). The leading
 // "v" is stripped before comparison since `brew info` reports the bare form.
+//
+// skipBrewUpdate gates ONLY the internal `brew update --quiet` tap-metadata
+// refresh. When true, that refresh is skipped and control flows directly to the
+// `brew info` version check; the up-to-date short-circuit and `brew upgrade`
+// are unaffected. The non-Homebrew-install short-circuit at the top is likewise
+// unaffected.
 //
 // out and errOut receive only the WRAPPER messages this package emits ("Current
 // version:", "Already up to date", error hints, etc.). Subprocess stdout/stderr
@@ -54,8 +70,8 @@ const (
 // Returns an error wrapping exec.ErrNotFound when brew is missing on PATH
 // (callers should map this to errSilent so cobra does not double-print).
 // Returns a wrapped error for other brew failures.
-func Update(currentVersion string, out, errOut io.Writer) error {
-	if !isBrewInstalled() {
+func Update(currentVersion string, skipBrewUpdate bool, out, errOut io.Writer) error {
+	if !brewInstalled() {
 		fmt.Fprintf(out, "idea %s was not installed via Homebrew.\n", currentVersion)
 		fmt.Fprintln(out, "Update manually, or reinstall with: brew install "+brewFormula)
 		return nil
@@ -64,21 +80,23 @@ func Update(currentVersion string, out, errOut io.Writer) error {
 	fmt.Fprintf(out, "Current version: %s\n", currentVersion)
 	fmt.Fprintln(out, "Checking for updates...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), brewUpdateTimeout)
-	updateCmd := exec.CommandContext(ctx, "brew", "update", "--quiet")
-	var updateStderr bytes.Buffer
-	updateCmd.Stderr = &updateStderr
-	err := updateCmd.Run()
-	cancel()
-	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			fmt.Fprintln(errOut, "idea update: brew not found on PATH.")
-			return err
+	if !skipBrewUpdate {
+		ctx, cancel := context.WithTimeout(context.Background(), brewUpdateTimeout)
+		updateCmd := execCommandContext(ctx, "brew", "update", "--quiet")
+		var updateStderr bytes.Buffer
+		updateCmd.Stderr = &updateStderr
+		err := updateCmd.Run()
+		cancel()
+		if err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				fmt.Fprintln(errOut, "idea update: brew not found on PATH.")
+				return err
+			}
+			if detail := strings.TrimSpace(updateStderr.String()); detail != "" {
+				return fmt.Errorf("brew update failed: %w: %s", err, detail)
+			}
+			return fmt.Errorf("brew update failed: %w", err)
 		}
-		if detail := strings.TrimSpace(updateStderr.String()); detail != "" {
-			return fmt.Errorf("brew update failed: %w: %s", err, detail)
-		}
-		return fmt.Errorf("brew update failed: %w", err)
 	}
 
 	latest, err := brewLatestVersion()
@@ -105,7 +123,7 @@ func Update(currentVersion string, out, errOut io.Writer) error {
 
 	upCtx, upCancel := context.WithTimeout(context.Background(), brewUpgradeTimeout)
 	defer upCancel()
-	cmd := exec.CommandContext(upCtx, "brew", "upgrade", brewFormula)
+	cmd := execCommandContext(upCtx, "brew", "upgrade", brewFormula)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -131,7 +149,7 @@ func Update(currentVersion string, out, errOut io.Writer) error {
 func brewLatestVersion() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), brewInfoTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "brew", "info", "--json=v2", brewFormula).Output()
+	out, err := execCommandContext(ctx, "brew", "info", "--json=v2", brewFormula).Output()
 	if err != nil {
 		return "", err
 	}
