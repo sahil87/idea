@@ -11,8 +11,8 @@ progress:
     apply: done
     review: done
     hydrate: done
-    ship: active
-    review-pr: pending
+    ship: done
+    review-pr: active
 checklist:
     generated: true
     path: checklist.md
@@ -37,6 +37,8 @@ stage_metrics:
     apply: {started_at: "2026-05-31T05:24:33Z", driver: fab-fff, iterations: 1, completed_at: "2026-05-31T05:27:13Z"}
     review: {started_at: "2026-05-31T05:27:13Z", driver: fab-continue, iterations: 1, completed_at: "2026-05-31T05:30:14Z"}
     hydrate: {started_at: "2026-05-31T05:30:14Z", driver: fab-fff, iterations: 1, completed_at: "2026-05-31T05:32:13Z"}
-    ship: {started_at: "2026-05-31T05:32:13Z", driver: fab-fff, iterations: 1}
-prs: []
-last_updated: 2026-05-31T05:32:13Z
+    ship: {started_at: "2026-05-31T05:32:13Z", driver: fab-fff, iterations: 1, completed_at: "2026-05-31T05:34:29Z"}
+    review-pr: {started_at: "2026-05-31T05:34:29Z", driver: git-pr, iterations: 1}
+prs:
+    - https://github.com/sahil87/idea/pull/5
+last_updated: 2026-05-31T05:34:29Z
