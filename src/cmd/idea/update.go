@@ -28,6 +28,6 @@ func updateCmd() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&skipBrewUpdate, "skip-brew-update", false, "skip the internal 'brew update' tap-metadata refresh")
+	cmd.Flags().BoolVar(&skipBrewUpdate, "skip-brew-update", false, "Skip the internal `brew update` tap-metadata refresh")
 	return cmd
 }
