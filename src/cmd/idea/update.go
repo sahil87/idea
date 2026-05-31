@@ -10,12 +10,14 @@ import (
 )
 
 func updateCmd() *cobra.Command {
-	return &cobra.Command{
+	var skipBrewUpdate bool
+
+	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "self-update the idea binary via Homebrew",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := idea.Update(version, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			err := idea.Update(version, skipBrewUpdate, cmd.OutOrStdout(), cmd.ErrOrStderr())
 			// internal/idea writes its own "brew not found" hint to stderr
 			// before returning an exec.ErrNotFound-wrapping error. Map it
 			// to errSilent so main's top-level error handler does not also
@@ -26,4 +28,9 @@ func updateCmd() *cobra.Command {
 			return err
 		},
 	}
+
+	cmd.Flags().BoolVar(&skipBrewUpdate, "skip-brew-update", false,
+		"Skip the internal 'brew update' tap-metadata refresh (still runs the version check and 'brew upgrade')")
+
+	return cmd
 }

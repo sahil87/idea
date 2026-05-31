@@ -86,7 +86,7 @@ Queries (the `<id>` arg on `show`, `done`, `reopen`, `edit`, `rm`) match against
 | `idea reopen <query>` | Reopen a completed idea. |
 | `idea edit <query> "text"` | Replace an idea's description. |
 | `idea rm <query> --force` | Delete an idea (requires `--force` to confirm). |
-| `idea update` | Self-update via Homebrew. |
+| `idea update` | Self-update via Homebrew. `--skip-brew-update` skips the internal `brew update` tap refresh (version check and `brew upgrade` still run). |
 
 Run `idea <command> --help` for inline flag details, or see [`docs/specs/overview.md`](docs/specs/overview.md) for the full CLI reference and [`docs/specs/backlog-format.md`](docs/specs/backlog-format.md) for the file format contract.
 
