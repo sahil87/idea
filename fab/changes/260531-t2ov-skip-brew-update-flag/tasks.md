@@ -32,3 +32,5 @@
 - T002 and T003 both edit `update.go` — apply sequentially, not in parallel.
 - T005 blocks T006 (the recorder + helper process are used by the table test).
 - T007 runs last, after all code + tests exist.
+
+<!-- Migrated to plan.md on 2026-06-02 — safe to delete. -->

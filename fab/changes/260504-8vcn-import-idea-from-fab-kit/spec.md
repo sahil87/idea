@@ -337,3 +337,5 @@ After the import, the `idea` binary SHALL build via `./scripts/build.sh` and res
 | 21 | Certain | The "Source content preserved verbatim" requirement also permits version-stamping wiring in `cmd/idea/main.go`: declare `var version = "dev"` plus a comment, and add `Version: version,` to the root cobra command. Pattern copied from `~/code/sahil87/wt/src/cmd/wt/main.go`. | Discovered during apply (T025): `./bin/idea --version` exited with `unknown flag: --version` because fab-kit's idea source has no version wiring. Build script's `-ldflags '-X main.version=${VERSION}'` was a no-op against the unmodified source, and the imported `.github/formula-template.rb`'s `#{bin}/idea --version` test would fail Homebrew's install-time check. User directed: "copy what wt has done." Verified wt's pattern by reading its main.go. Three-line edit: the var declaration + comment + the `Version:` field. | S:100 R:80 A:95 D:100 |
 
 21 assumptions (18 certain, 3 confident, 0 tentative, 0 unresolved).
+
+<!-- Merged into plan.md ## Requirements on 2026-06-02 — safe to delete. -->

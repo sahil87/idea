@@ -74,3 +74,5 @@
 - T010 (compile) depends on T001-T009.
 - T011, T012 (test) depend on T010.
 - T013, T014 (smoke) depend on T010.
+
+<!-- Migrated to plan.md on 2026-06-02 — safe to delete. -->

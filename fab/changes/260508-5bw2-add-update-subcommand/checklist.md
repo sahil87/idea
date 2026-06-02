@@ -66,3 +66,5 @@
 - Check items as you review: `- [x]`
 - All items must pass before `/fab-continue` (hydrate)
 - If an item is not applicable, mark checked and prefix with **N/A**: `- [x] CHK-018 **N/A**: live Homebrew unavailable in CI`
+
+<!-- Migrated to plan.md on 2026-06-02 — safe to delete. -->

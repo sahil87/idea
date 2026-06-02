@@ -333,3 +333,5 @@ A new memory file SHALL be created at `docs/memory/cli/update.md` covering:
 | 15 | Certain | Non-zero exit code from `brew upgrade` returns error of form `brew upgrade exited with code {N}` | Spec-stage analysis: matches hop's `proc.RunForeground` return-code propagation pattern; user gets a specific actionable signal vs. a generic "failed" | S:90 R:85 A:85 D:85 |
 
 15 assumptions (15 certain, 0 confident, 0 tentative, 0 unresolved).
+
+<!-- Merged into plan.md ## Requirements on 2026-06-02 — safe to delete. -->

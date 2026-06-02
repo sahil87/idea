@@ -108,3 +108,5 @@ A test in `src/internal/idea/update_test.go` MUST assert that with `skipBrewUpda
 | 8 | Confident | Test seam = two `var` indirections (`execCommandContext`, `brewInstalled`) + Go helper-process pattern | Upgraded from intake #8 (Tentative→Confident) — Design Decision 1 selects the minimal idiomatic seam over PATH-shim/interface; canonical stdlib pattern, zero deps. Remains Confident (not Certain) because the exact recorder shape is an implementation detail settled at apply | S:75 R:65 A:80 D:75 |
 
 8 assumptions (7 certain, 1 confident, 0 tentative, 0 unresolved).
+
+<!-- Merged into plan.md ## Requirements on 2026-06-02 — safe to delete. -->

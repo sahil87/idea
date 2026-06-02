@@ -71,3 +71,5 @@
 <!-- Added during cycle 3 review to cover items introduced by Phase 6 (T036–T038). -->
 
 - [x] CHK-043 `docs/specs/backlog-format.md` accurately represents that lines containing the optional `[issue_ids]` bracket are invisible to ALL idea operations (not just the slot). Verified: doc now uses explicit Shape A (idea-managed, no second bracket — parsed/queried/round-tripped) vs Shape B (any line with extra content between `[{ID}]` and the date — inert pass-through, invisible to `list`/`show`/`done`/`edit`/`rm`, round-trip preserved per Constitution principle I) framing. The with-issue-ID example annotation explicitly states "this form is preserved verbatim by `idea` on round-trip, but is NOT visible to any `idea` query — it is treated as inert content." The Stability Commitment distinguishes Shape A's full parsing contract from Shape B's round-trip-only contract. Live-tested: a backlog with one Shape A and one Shape B line — `idea list` shows only the Shape A line; `idea show <Shape-B-id>` exits 1; `idea show <Shape-A-id>` exits 0.
+
+<!-- Migrated to plan.md on 2026-06-02 — safe to delete. -->

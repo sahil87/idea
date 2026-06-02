@@ -109,3 +109,5 @@
 - **T026, T027** are independent file creates — can run in parallel and are independent of Go work.
 - **T028** depends on T026 and T027 (links target those files).
 - **T029** is independent of Go work but depends on T026 and T027 existing if it cross-links them.
+
+<!-- Migrated to plan.md on 2026-06-02 — safe to delete. -->
