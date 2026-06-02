@@ -134,3 +134,39 @@ jobs:
           git add Formula/idea.rb
           git commit -m "idea v${version}"
           git push
+
+      - name: Dump help tree and PR to shll.ai
+        env:
+          GH_TOKEN: ${{ secrets.SHLLAI_TOKEN }}   # sahil87 PAT: contents + pull-requests write on shll.ai
+        run: |
+          version="${{ steps.version.outputs.version }}"
+
+          # 1. Produce the dump from the stamped native binary
+          mkdir -p help
+          dist/idea-linux-amd64/idea help-dump > help/idea.json
+
+          # 2. Validate it parses as JSON locally (fail the step early if malformed;
+          #    the authoritative schema check is shll.ai's validate-help.mjs gate).
+          python3 -c "import json; json.load(open('help/idea.json'))" \
+            || { echo "help/idea.json is not valid JSON"; exit 1; }
+
+          # 3. Clone shll.ai, stage ONLY help/idea.json (content guard), open a PR.
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/sahil87/shll.ai.git" /tmp/shll-ai
+          cp help/idea.json /tmp/shll-ai/help/idea.json
+          cd /tmp/shll-ai
+          if git diff --quiet -- help/idea.json; then
+            echo "No change to help/idea.json — skipping PR"
+            exit 0
+          fi
+          branch="help-dump/idea-${version}"
+          # Author as sahil87 to satisfy the actor guard (TRUSTED_AUTHOR).
+          git config user.name "sahil87"
+          git config user.email "sahil@noon.design"
+          git checkout -b "$branch"
+          git add help/idea.json                      # only this file — content guard
+          git commit -m "idea: update command reference (v${version})"
+          git push -u origin "$branch"
+          gh pr create --repo sahil87/shll.ai --base main --head "$branch" \
+            --title "idea: command reference v${version}" \
+            --body "Automated help-dump from sahil87/idea v${version}. Auto-merges via help-automerge.yml once the three guards (actor/content/schema) pass."
+          # NO `gh pr merge` here — shll.ai's help-automerge.yml owns merging.
