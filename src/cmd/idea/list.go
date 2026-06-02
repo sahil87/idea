@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/sahil87/idea/internal/idea"
+	"github.com/spf13/cobra"
 )
 
 func listCmd() *cobra.Command {
@@ -16,6 +16,18 @@ func listCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List ideas from the backlog",
+		Long: `List ideas from the current worktree's backlog (fab/backlog.md).
+
+Open ideas are shown by default. Use --all/-a to include done ideas, or --done
+to show only completed ones. --json emits the structured records (id, date,
+status, text) for piping into other tools. --sort accepts "date" (default) or
+"id", and --reverse flips the order. As with every backlog command, --main
+targets the main worktree's backlog and --file / IDEAS_FILE point elsewhere
+(see "idea --help").
+
+  idea list
+  idea list --all --sort id
+  idea list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {

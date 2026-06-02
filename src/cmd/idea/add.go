@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/sahil87/idea/internal/idea"
+	"github.com/spf13/cobra"
 )
 
 func addCmd() *cobra.Command {
@@ -13,7 +13,17 @@ func addCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <text>",
 		Short: "Add a new idea to the backlog",
-		Args:  cobra.ExactArgs(1),
+		Long: `Add a new idea to the current worktree's backlog (fab/backlog.md).
+
+The idea is appended as a Markdown checklist line with a generated 4-char ID
+and today's date. Use --id and --date to override those generated values
+(handy when importing or backdating). By default the command writes the
+current worktree's backlog; --main targets the main worktree's backlog, and
+--file / IDEAS_FILE point at a different file (see "idea --help").
+
+  idea add "wire up dark mode"
+  idea add --id a7k2 --date 2026-06-01 "backdated idea"`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {

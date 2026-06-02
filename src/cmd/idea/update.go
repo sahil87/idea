@@ -15,7 +15,20 @@ func updateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "self-update the idea binary via Homebrew",
-		Args:  cobra.NoArgs,
+		Long: `Self-update the idea binary via Homebrew.
+
+Checks the installed idea formula against the latest published release and runs
+"brew upgrade" only when a newer version exists; if the binary is already
+current it prints "Already up to date" and exits without upgrading. The tap
+metadata is refreshed first (via an internal "brew update") so a just-published
+release is visible. Pass --skip-brew-update to skip only that tap-metadata
+refresh (faster, but may miss a just-published version) — the version check and
+any needed upgrade still run. If idea was not installed via Homebrew, the
+command explains how to update manually instead.
+
+  idea update
+  idea update --skip-brew-update`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			err := idea.Update(version, skipBrewUpdate, cmd.OutOrStdout(), cmd.ErrOrStderr())
 			// internal/idea writes its own "brew not found" hint to stderr
