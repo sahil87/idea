@@ -20,7 +20,10 @@ var version = "dev"
 // handler in main exits non-zero without printing anything additional.
 var errSilent = errors.New("silent")
 
-func main() {
+// newRootCmd builds the root command and registers all subcommands. It is the
+// single source of the live cobra tree: both main() and the help-dump producer
+// (which walks cmd.Root()) operate on the identical tree this factory builds.
+func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "idea [text]",
 		Short: "Backlog idea management (current worktree; use --main for main worktree)",
@@ -58,9 +61,14 @@ Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 		rmCmd(),
 		updateCmd(),
 		newShellInitCmd(),
+		helpDumpCmd(),
 	)
 
-	if err := root.Execute(); err != nil {
+	return root
+}
+
+func main() {
+	if err := newRootCmd().Execute(); err != nil {
 		if !errors.Is(err, errSilent) {
 			fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 		}
