@@ -17,10 +17,14 @@ func updateCmd() *cobra.Command {
 		Short: "self-update the idea binary via Homebrew",
 		Long: `Self-update the idea binary via Homebrew.
 
-Runs the Homebrew upgrade for the installed idea formula, refreshing tap
-metadata first so the latest published release is visible. Pass
---skip-brew-update to skip that internal "brew update" refresh when the tap is
-already current (faster, but may miss a just-published version).
+Checks the installed idea formula against the latest published release and runs
+"brew upgrade" only when a newer version exists; if the binary is already
+current it prints "Already up to date" and exits without upgrading. The tap
+metadata is refreshed first (via an internal "brew update") so a just-published
+release is visible. Pass --skip-brew-update to skip only that tap-metadata
+refresh (faster, but may miss a just-published version) — the version check and
+any needed upgrade still run. If idea was not installed via Homebrew, the
+command explains how to update manually instead.
 
   idea update
   idea update --skip-brew-update`,

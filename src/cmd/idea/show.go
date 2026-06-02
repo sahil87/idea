@@ -21,8 +21,8 @@ func showCmd() *cobra.Command {
 substring of its text. If it matches more than one idea it is refused and the
 ambiguous matches are listed, so you can be more specific or use the exact ID.
 --json emits the structured record (id, date, status, text) instead of the
-formatted line. --main targets the main worktree's backlog and --file /
-IDEAS_FILE point elsewhere (see "idea --help").
+formatted line. --main targets the main worktree's backlog, and
+--file / IDEAS_FILE point elsewhere (see "idea --help").
 
   idea show a7k2
   idea show "dark mode" --json`,
