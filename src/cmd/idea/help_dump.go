@@ -100,6 +100,7 @@ func helpDumpCmd() *cobra.Command {
 		Use:    "help-dump",
 		Short:  "Emit the CLI help tree as JSON (build tooling)",
 		Hidden: true,
+		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := cmd.Root()
 			dump := helpDump{
