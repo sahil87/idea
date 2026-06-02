@@ -1,0 +1,18 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-02T17:32:16Z"}
+{"args":"Enrich the cobra Long descriptions for idea's commands so that idea \u003ccmd\u003e -h carries the human explanation, not just a one-line Short + flag list. Feeds the shll.ai command-reference (single-sourced from the binary via nnsn help-dump). Flesh out Long in src/cmd/idea/{add,list,done,edit,rm,show,reopen,update}.go.","cmd":"fab-new","event":"command","ts":"2026-06-02T17:32:16Z"}
+{"delta":"+3.1","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-06-02T17:33:12Z"}
+{"delta":"+0.0","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-06-02T17:33:21Z"}
+{"cmd":"fab-clarify","event":"command","ts":"2026-06-02T17:38:36Z"}
+{"delta":"+0.0","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-06-02T17:45:04Z"}
+{"delta":"+0.0","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-06-02T17:45:09Z"}
+{"delta":"+1.0","event":"confidence","score":4.1,"trigger":"calc-score","ts":"2026-06-02T17:45:15Z"}
+{"delta":"+0.0","event":"confidence","score":4.1,"trigger":"calc-score","ts":"2026-06-02T17:45:19Z"}
+{"delta":"+0.0","event":"confidence","score":4.1,"trigger":"calc-score","ts":"2026-06-02T17:45:23Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-06-02T18:38:14Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-06-02T18:38:21Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-06-02T18:39:02Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-06-02T18:41:44Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-06-02T18:43:55Z"}
+{"event":"review","result":"passed","ts":"2026-06-02T18:43:55Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-02T18:45:18Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-06-02T18:45:22Z"}

@@ -53,6 +53,12 @@ Two principles in `fab/project/constitution.md` constrain code placement inside 
 
 The split forces a testable seam — `internal/idea` is unit-tested directly (table-driven, real temp dirs, no mocks) without spawning subprocesses. `cmd/idea/main_test.go` covers the end-to-end CLI by building the binary under test.
 
+## Command help text (`Short` vs `Long`)
+
+Every subcommand sets an enriched cobra `Long` describing what it does, its key flags, the worktree-vs-`--main` resolution (for backlog-touching commands), and a short example. `Short` stays the terse one-liner used by the `Available Commands` sidebar and the `idea -h` root listing — it is a public, byte-stable string; depth goes in `Long` only. The convention was applied repo-wide by `260602-s73u-enrich-command-long-help` (the 8 backlog/update commands; `main.go` / `shell_init.go` already carried `Long`).
+
+This is the single source for the shll.ai command-reference: the build-time help-dump (`[nnsn]`) captures each command's `Long` + `UsageString` as the reference node's `text` (see the `help-dump` subcommand below), so the prose is written once in the binary and never drifts from the site. New subcommands SHOULD carry a `Long` (raw backtick string, short paragraphs, inline example) rather than `Short`-only — there is no CI signal enforcing it.
+
 ## Root command factory
 
 `cmd/idea/main.go` builds the root command through a `newRootCmd() *cobra.Command` factory rather than inline inside `main()`. The factory constructs root (with `Version: version`, the bare-text shorthand `RunE`, and the `--file`/`--main` persistent flags) and registers every subcommand:
