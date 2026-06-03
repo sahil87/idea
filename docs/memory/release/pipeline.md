@@ -38,31 +38,19 @@ For each target, it runs `CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags 
 - `VERSION_PLACEHOLDER` → version string (no `v` prefix)
 - `SHA_DARWIN_ARM64`, `SHA_DARWIN_AMD64`, `SHA_LINUX_ARM64`, `SHA_LINUX_AMD64` → tarball SHA256s
 
-The substituted formula is written to `/tmp/homebrew-tap/Formula/idea.rb`, committed as `idea v${version}` (author: `github-actions[bot]`), and pushed.
+The substituted formula is written to `/tmp/homebrew-tap/Formula/idea.rb`, committed as `idea v${version}` (author: `github-actions[bot]`), and pushed. This is the **final** step of the release workflow.
 
-**Help-dump → shll.ai command reference.** The final step (ordered last, after the GitHub Release and Homebrew tap update) publishes `idea`'s CLI help tree to the shll.ai landing site, which renders it as an expandable "Command reference" on the tool page. It is **best-effort** — placed last so a failure here cannot abort the release. The step:
+### shll.ai command reference: pull model (idea no longer pushes)
 
-1. Runs `dist/idea-linux-amd64/idea help-dump > help/idea.json` — the native `linux/amd64` runner binary, which carries the real ldflags version stamp from the Cross-compile step (a `go run`/`dev` build would emit `version: dev`). The dump is the hidden `help-dump` subcommand in the binary; its JSON contract is documented in `../cli/structure.md`.
-2. Validates the file parses as JSON locally (`python3 -c "import json; json.load(...)"`), failing the step early if malformed.
-3. Clones `sahil87/shll.ai` over HTTPS using `SHLLAI_TOKEN`, copies in **only** `help/idea.json`, and — when it differs from the committed version — commits on a per-version branch `help-dump/idea-${version}` and opens a PR via `gh pr create`.
+`idea`'s release **does not publish** its CLI help tree anywhere. The shll.ai landing site renders the command reference by **pulling** `idea`'s help on its own schedule: a scheduled job in `sahil87/shll.ai` `brew install`s `idea`, runs `idea help-dump`, and commits the captured JSON itself (also on-demand via `workflow_dispatch`). The previous release-side push (clone shll.ai, diff `help/idea.json`, open an auto-merged PR via a `sahil87` PAT) was removed once shll.ai's pull workflow went live — it raced/duplicated the pull and kept an unnecessary cross-repo write path and credential alive.
 
-The step deliberately does **NOT** call `gh pr merge`. shll.ai owns merging through its own `.github/workflows/help-automerge.yml`, which enables auto-merge only when three guards pass: **actor** (PR author is the trusted identity `sahil87`), **content** (every changed file is under `help/`), and **schema** (the JSON passes shll.ai's `validate-help.mjs` Zod contract). idea's side only opens the PR. (shll.ai's repo `allow_auto_merge` is `false` at the native-feature level, so a `gh pr merge --auto` from here would fail — the receiving workflow does the merge.)
-
-Three constraints in the step exist to satisfy those guards:
-
-- **Authorship** — the commit is configured as `sahil87`/`sahil@noon.design`, not `github-actions[bot]`. The shll.ai actor guard (`TRUSTED_AUTHOR: sahil87`) refuses to auto-merge any other author. This is why `SHLLAI_TOKEN` must be a `sahil87` PAT, not a generic bot token — the PAT both authenticates the clone/push and attributes `gh` authorship to `sahil87`.
-- **Content** — `git add` / commit stage **only** `help/idea.json`. A mixed diff trips the content guard and is left for manual review.
-- **No-op guard** — when `help/idea.json` is unchanged (no flag/command churn since the last release), `git diff --quiet` short-circuits the step to `exit 0` with no PR, avoiding empty-PR spam.
-
-**Why PR, not direct push.** This is one slice of a 7-tool rollout whose tools all write to shll.ai. Direct pushes to `main` race on non-fast-forward; routing through a PR + the receiving auto-merge workflow serializes integration. The site-side consumer (Astro loader + reference UI, Zod schema, `help-automerge.yml`) lives in the shll.ai repo and is out of scope for this repo.
+The producer — the hidden `help-dump` subcommand and the frozen JSON contract it emits — is **unchanged** and remains the single contract surface shll.ai pulls. See `../cli/structure.md`.
 
 ## Secrets
 
 `HOMEBREW_TAP_TOKEN` must have `contents: write` permission on `sahil87/homebrew-tap`. The same token already powers the `hop` and `fab-kit` releases — there is one shared token across the maintainer's single-binary Go releases, set per-repo.
 
-`SHLLAI_TOKEN` is a **`sahil87` Personal Access Token** with `contents` + `pull-requests` write on `sahil87/shll.ai`, used by the help-dump step. Two things make it specifically a PAT (not the in-repo `GITHUB_TOKEN` or a bot token): (1) it must authenticate against a *different* repo (shll.ai), and (2) its `sahil87` identity is load-bearing — the step commits as `sahil87` and `gh pr create` attributes the PR to that identity, which is required to pass shll.ai's `help-automerge.yml` actor guard (`TRUSTED_AUTHOR: sahil87`). A `github-actions[bot]`-authored PR would not auto-merge. It is exported as `GH_TOKEN` so both `gh` and the clone URL authenticate against shll.ai.
-
-The release workflow itself also declares `permissions: contents: write` for the in-repo GitHub Release creation step. The shll.ai write does not use `GITHUB_TOKEN`, so no in-repo permission change was needed to add the help-dump step.
+The release workflow declares `permissions: contents: write` for the in-repo GitHub Release creation step.
 
 ## Local install path (no release needed)
 
@@ -73,11 +61,15 @@ The release workflow itself also declares `permissions: contents: write` for the
 - `scripts/release.sh` — tag cutter (local).
 - `scripts/build.sh` — local cross-compile-free build with `git describe`-derived version stamp.
 - `scripts/install.sh` — `build.sh` + copy to `~/.local/bin/idea`.
-- `.github/workflows/release.yml` — CI release pipeline (cross-compile, GitHub Release, Homebrew tap update, help-dump PR to shll.ai).
+- `.github/workflows/release.yml` — CI release pipeline (cross-compile, GitHub Release, Homebrew tap update).
 - `.github/formula-template.rb` — Homebrew formula with five sed placeholders.
 - `justfile` — wrapper recipes (`build`, `local-install`, `test`, `release`).
+
+## Design Decisions
+
+- **260603-wtjc — retired the release-side help-dump push to shll.ai.** The release workflow used to walk the Cobra tree, write `help/idea.json`, and open an auto-merged PR into `sahil87/shll.ai` via a `sahil87` PAT (`SHLLAI_TOKEN`). That step was removed once shll.ai went to a pull model: shll.ai now `brew install`s `idea`, runs `idea help-dump`, and commits the JSON on its own schedule, so the push raced/duplicated the pull and kept an unnecessary cross-repo write path and credential alive. *Transport only* — the `help-dump` command and its JSON contract are unchanged (`schema_version` still `1`). **Follow-up (manual, not done by the PR):** delete the now-unused repo secret — `gh secret delete SHLLAI_TOKEN --repo sahil87/idea` — no workflow references it.
 
 ## Cross-references
 
 - Source layout assumed by the build path (`./cmd/idea`) and version-stamp wiring (`-X main.version=...`): see `../cli/structure.md`.
-- The hidden `help-dump` subcommand the help-dump step invokes, and the frozen JSON contract it emits: `../cli/structure.md`.
+- The hidden `help-dump` subcommand that shll.ai pulls, and the frozen JSON contract it emits: `../cli/structure.md`.
