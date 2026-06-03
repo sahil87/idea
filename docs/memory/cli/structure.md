@@ -57,7 +57,7 @@ The split forces a testable seam — `internal/idea` is unit-tested directly (ta
 
 Every subcommand sets an enriched cobra `Long` describing what it does, its key flags, the worktree-vs-`--main` resolution (for backlog-touching commands), and a short example. `Short` stays the terse one-liner used by the `Available Commands` sidebar and the `idea -h` root listing — it is a public, byte-stable string; depth goes in `Long` only. The convention was applied repo-wide by `260602-s73u-enrich-command-long-help` (the 8 backlog/update commands; `main.go` / `shell_init.go` already carried `Long`).
 
-This is the single source for the shll.ai command-reference: the build-time help-dump (`[nnsn]`) captures each command's `Long` + `UsageString` as the reference node's `text` (see the `help-dump` subcommand below), so the prose is written once in the binary and never drifts from the site. New subcommands SHOULD carry a `Long` (raw backtick string, short paragraphs, inline example) rather than `Short`-only — there is no CI signal enforcing it.
+This is the single source for the shll.ai command-reference: the `help-dump` subcommand captures each command's `Long` + `UsageString` as the reference node's `text` (see the `help-dump` subcommand below), so the prose is written once in the binary and never drifts from the site. shll.ai pulls that JSON by running `idea help-dump` on its own schedule — `idea`'s release no longer pushes it (see `../release/pipeline.md`). New subcommands SHOULD carry a `Long` (raw backtick string, short paragraphs, inline example) rather than `Short`-only — there is no CI signal enforcing it.
 
 ## Root command factory
 
@@ -76,13 +76,13 @@ The factory exists so the live cobra tree can be constructed in two places off t
 
 ## Hidden `help-dump` subcommand
 
-`cmd/idea/help_dump.go` registers a hidden (`Hidden: true`, `Use: "help-dump"`) subcommand that emits the CLI help tree as JSON to `OutOrStdout()`, for build tooling. It is consumed by the release pipeline's shll.ai command-reference publisher (see `../release/pipeline.md`); the JSON shape is a **frozen cross-repo contract** shared across a 7-tool rollout, with `sahil87/shll.ai` `help/wt.json` as the reference sample.
+`cmd/idea/help_dump.go` registers a hidden (`Hidden: true`, `Use: "help-dump"`) subcommand that emits the CLI help tree as JSON to `OutOrStdout()`. It is consumed by shll.ai, which **pulls** it by `brew install`ing `idea` and running `idea help-dump` on its own schedule (see `../release/pipeline.md`); the JSON shape is a **frozen cross-repo contract** shared across a 7-tool rollout, with `sahil87/shll.ai` `help/wt.json` as the reference sample.
 
 **Envelope** (`helpDump`, in field/JSON order): `tool` (literal `"idea"`), `version` (read from `cmd.Root().Version`, the ldflags-stamped value — never hardcoded), `captured_at` (`time.Now().UTC().Format(time.RFC3339)`), `schema_version` (the `helpSchemaVersion` const, `1`), `root` (`buildNode(cmd.Root())`).
 
 **Node** (`helpNode`, in field/JSON order): `name` (`cmd.Name()`), `path` (`cmd.CommandPath()`, e.g. `idea add`), `short` (`cmd.Short`), `usage` (`cmd.UseLine()`), `text`, `commands` (recursive `[]helpNode`, initialized to `[]helpNode{}` so leaves serialize as `[]`, never `null`).
 
-The output is `json.MarshalIndent(dump, "", "  ")` (2-space indent) plus a trailing newline. The subcommand is stdout-only — it has no `--output` flag; the CI step owns file placement (redirecting into `help/idea.json`).
+The output is `json.MarshalIndent(dump, "", "  ")` (2-space indent) plus a trailing newline. The subcommand is stdout-only — it has no `--output` flag; the consumer (shll.ai's pull job) owns file placement, redirecting stdout into its own `help/idea.json`.
 
 ### Three implementation details that are load-bearing for the contract
 
@@ -113,6 +113,6 @@ This wiring is required because `idea` is released independently:
 
 ## Cross-references
 
-- Release pipeline that consumes this layout (build path, version stamping, Homebrew formula) and runs `help-dump` to publish the command reference to shll.ai: `../release/pipeline.md`.
+- Release pipeline that consumes this layout (build path, version stamping, Homebrew formula); shll.ai pulls the command reference via `idea help-dump` (the release no longer publishes it): `../release/pipeline.md`.
 - Self-update subcommand built on top of the Homebrew tap (`update.go` / `internal/idea/update.go`): `update.md`.
 - Constitution principles III and IV: `fab/project/constitution.md`.
