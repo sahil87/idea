@@ -82,14 +82,16 @@ The memory file documents the deleted step in detail. Update it to reflect the p
 ## Affected Memory
 
 - `release/pipeline.md`: (modify) Remove the help-dump→shll.ai step subsection and the `SHLLAI_TOKEN` secret paragraph; note that shll.ai now pulls via `idea help-dump`; trim the `release.yml` file-index description.
-- `cli/structure.md`: (none) `help-dump` command is unchanged; no memory edit required (verify it doesn't claim the push step exists — it documents the command/contract, not the CI transport).
+- `cli/structure.md`: (modify) Correct the push-model phrasing to the pull model (lines ~60, 79, 85, 116): help-dump is now *pulled* by shll.ai (`brew install` + `idea help-dump` on its own schedule), not published by a release-side CI step. The `help-dump` command/contract itself is unchanged — only the transport description. <!-- Originally scoped (none) at intake; the review stage found these lines contradicted the updated pipeline.md, so the fix was folded into this change. -->
+
+> **Scope note**: `cli/structure.md` was originally scoped `(none)` at intake (on the assumption it documented only the command/contract, not the transport). Review found three lines that *did* describe the now-removed push transport and contradicted the updated `pipeline.md`, so the correction was made within this change. This note reconciles the artifact with the actual diff.
 
 ## Impact
 
 - **CI**: `.github/workflows/release.yml` — one step removed (~48 lines). Remaining steps (cross-compile, GitHub Release, release-notes base, Homebrew tap) unaffected; they have no dependency on the deleted step.
 - **Secrets**: `SHLLAI_TOKEN` becomes unreferenced by any workflow. Repo-secret deletion flagged as a manual post-merge step (cannot be done from the PR).
 - **Source code**: none. `help-dump` command and test are explicitly preserved (critical invariant).
-- **Docs**: `docs/memory/release/pipeline.md` updated to the pull model.
+- **Docs**: `docs/memory/release/pipeline.md` and `docs/memory/cli/structure.md` updated to the pull model.
 - **Downstream (shll.ai)**: none from this repo — shll.ai's live pull workflow already refreshes `idea`'s help independently, so retiring the push leaves no gap.
 - **Backlog**: mark `[nnsn]` superseded by this teardown (the push feature it tracked is being removed).
 
