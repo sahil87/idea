@@ -90,7 +90,7 @@ Queries (the `<id>` arg on `show`, `done`, `reopen`, `edit`, `rm`) match against
 | `idea rm <query> --force` | Delete an idea (requires `--force` to confirm). |
 | `idea update` | Self-update via Homebrew. |
 
-Run `idea <command> --help` for inline flag details, or see [`docs/specs/overview.md`](https://github.com/sahil87/idea/blob/main/docs/specs/overview.md) for the full CLI reference and [`docs/specs/backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) for the file format contract.
+Run `idea <command> --help` for inline flag details, browse the [full command reference](https://shll.ai/tools/idea/commands/) on shll.ai, or see [`docs/specs/overview.md`](https://github.com/sahil87/idea/blob/main/docs/specs/overview.md) for the full CLI reference and [`docs/specs/backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) for the file format contract.
 
 ### Worktree-aware by default
 
