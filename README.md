@@ -32,6 +32,8 @@ Builds the binary and copies it to `~/.local/bin/idea`. Make sure that directory
 
 To upgrade later: `idea update` (self-upgrades via Homebrew).
 
+For Homebrew details, manual-build prerequisites, shell completion, and upgrades, see the full [install guide](docs/site/install.md).
+
 ## Shell completion
 
 `idea shell-init <shell>` emits eval-safe tab-completion for your shell. Add this line to your rc file:
@@ -88,7 +90,7 @@ Queries (the `<id>` arg on `show`, `done`, `reopen`, `edit`, `rm`) match against
 | `idea rm <query> --force` | Delete an idea (requires `--force` to confirm). |
 | `idea update` | Self-update via Homebrew. |
 
-Run `idea <command> --help` for inline flag details, or see [`docs/specs/overview.md`](docs/specs/overview.md) for the full CLI reference and [`docs/specs/backlog-format.md`](docs/specs/backlog-format.md) for the file format contract.
+Run `idea <command> --help` for inline flag details, or see [`docs/specs/overview.md`](https://github.com/sahil87/idea/blob/main/docs/specs/overview.md) for the full CLI reference and [`docs/specs/backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) for the file format contract.
 
 ### Worktree-aware by default
 
@@ -115,10 +117,12 @@ Why the default favors the current worktree: when you're heads-down on a change 
 
 For bulk work, `fab batch new` reads every open idea and spawns a worktree + Claude session per item — the whole backlog becomes a parallel work queue in one command.
 
-The backlog format is a stable public contract — any tool that follows [`backlog-format.md`](docs/specs/backlog-format.md) can read or write the file without coupling to `idea`'s internals.
+The backlog format is a stable public contract — any tool that follows [`backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) can read or write the file without coupling to `idea`'s internals.
+
+For a deeper walkthrough of worktree resolution, the fab-kit loop, and the backlog format, see [workflows](docs/site/workflows.md).
 
 ## Gotchas
 
 - **`idea rm` requires `--force`.** This is intentional — deletes are destructive and there's no undo. Use `idea done` if you just want the item out of `idea list`.
 - **Ambiguous queries refuse to act.** If your query matches more than one idea, `idea done`, `edit`, and `rm` print the matches and exit without changing anything. Disambiguate with the 4-char ID.
-- **Lines with extra brackets are invisible to queries.** fab-kit's `/fab-new` writes issue IDs into a second bracket (e.g., `- [ ] [qu1d] [DEV-1011] 2026-05-11: ...`). Those lines are preserved verbatim in the file but won't appear in `idea list` or match `idea show` — they're treated as inert pass-through content. See [`backlog-format.md`](docs/specs/backlog-format.md) for the Shape A vs. Shape B distinction.
+- **Lines with extra brackets are invisible to queries.** fab-kit's `/fab-new` writes issue IDs into a second bracket (e.g., `- [ ] [qu1d] [DEV-1011] 2026-05-11: ...`). Those lines are preserved verbatim in the file but won't appear in `idea list` or match `idea show` — they're treated as inert pass-through content. See [`backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) for the Shape A vs. Shape B distinction.
