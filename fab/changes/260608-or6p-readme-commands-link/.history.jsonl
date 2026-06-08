@@ -1,0 +1,8 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-08T10:34:08Z"}
+{"args":"Add a README Command-reference link to the live shll.ai commands page (https://shll.ai/tools/idea/commands/), keeping the existing absolute docs/specs/overview.md link too. Stacked on PR #9.","cmd":"fab-new","event":"command","ts":"2026-06-08T10:34:08Z"}
+{"delta":"+5.0","event":"confidence","score":5,"trigger":"calc-score","ts":"2026-06-08T10:35:04Z"}
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"apply","ts":"2026-06-08T10:35:11Z"}
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"review","ts":"2026-06-08T10:35:17Z"}
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"hydrate","ts":"2026-06-08T10:35:17Z"}
+{"event":"review","result":"passed","ts":"2026-06-08T10:35:17Z"}
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"ship","ts":"2026-06-08T10:35:17Z"}
