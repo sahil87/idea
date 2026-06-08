@@ -1,0 +1,51 @@
+id: 3ra7
+name: 260608-3ra7-shll-readme-contract
+created: 2026-06-08T09:58:08Z
+created_by: sahil-noon
+change_type: docs
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: done
+    review-pr: active
+plan:
+    generated: true
+    task_count: 6
+    acceptance_count: 15
+    acceptance_completed: 15
+confidence:
+    certain: 8
+    confident: 1
+    tentative: 1
+    unresolved: 0
+    score: 3.7
+    fuzzy: true
+    dimensions:
+        signal: 92.6
+        reversibility: 92.2
+        competence: 92.3
+        disambiguation: 91.4
+stage_metrics:
+    intake: {started_at: "2026-06-08T09:58:08Z", driver: fab-new, iterations: 1, completed_at: "2026-06-08T10:00:51Z"}
+    apply: {started_at: "2026-06-08T10:00:51Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-08T10:05:48Z"}
+    review: {started_at: "2026-06-08T10:05:48Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-08T10:09:03Z"}
+    hydrate: {started_at: "2026-06-08T10:09:03Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-08T10:12:33Z"}
+    ship: {started_at: "2026-06-08T10:12:33Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-08T10:14:14Z"}
+    review-pr: {started_at: "2026-06-08T10:14:14Z", driver: git-pr, iterations: 1}
+prs:
+    - https://github.com/sahil87/idea/pull/9
+true_impact:
+    added: 0
+    deleted: 0
+    net: 0
+    excluding:
+        added: 0
+        deleted: 0
+        net: 0
+    computed_at: "2026-06-08T10:12:33Z"
+    computed_at_stage: hydrate
+# true_impact: lazily created on first apply-finish (no placeholder here).
+last_updated: 2026-06-08T10:14:14Z

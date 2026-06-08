@@ -46,6 +46,16 @@ The substituted formula is written to `/tmp/homebrew-tap/Formula/idea.rb`, commi
 
 The producer — the hidden `help-dump` subcommand and the frozen JSON contract it emits — is **unchanged** and remains the single contract surface shll.ai pulls. See `../cli/structure.md`.
 
+### shll.ai tool page: README + `docs/site/**` are also pulled and rendered
+
+Beyond the `help-dump` JSON, shll.ai also **pulls and renders this repo's `README.md` and `docs/site/**` tree daily** to build the `idea` tool page (README → `/tools/idea/readme`; `docs/site/<page>.md` → `/tools/idea/<page>`, e.g. `install.md` → `/tools/idea/install`, `workflows.md` → `/tools/idea/workflows`). The pull is mechanical and verbatim — nothing is pushed or hand-fixed — so **this repo's file structure is the only thing that controls whether the page renders cleanly**. Editing-time gotchas a contributor will trip over:
+
+- **External links in `README.md` and `docs/site/**` MUST be absolute `https://…`.** Relative links that leave the rendered set (e.g. to `docs/specs/`) are not rewritten and render as live 404s. Intra-`docs/site/` links use natural relative syntax (`[x](workflows.md)`) with no `..` escapes.
+- **Reserved page slugs MUST NOT be used as `docs/site/` filenames**: `overview`, `readme`, `commands` (the `idea` row of the contract's per-tool table). `install`/`workflows` are allowed.
+- **No mermaid fences and no `#gh-*-mode-only` theme fragments** in the rendered set (render as broken); any image must be an absolute `https://…` URL.
+
+The authoritative rules live in shll.ai's README-extraction contract — do not duplicate them here, follow the source: <https://github.com/sahil87/shll.ai/blob/main/docs/specs/readme-extraction-contract.md> (per-tool table + §Producer conformance directive). Established by change `260608-3ra7`.
+
 ## Secrets
 
 `HOMEBREW_TAP_TOKEN` must have `contents: write` permission on `sahil87/homebrew-tap`. The same token already powers the `hop` and `fab-kit` releases — there is one shared token across the maintainer's single-binary Go releases, set per-repo.
@@ -68,8 +78,10 @@ The release workflow declares `permissions: contents: write` for the in-repo Git
 ## Design Decisions
 
 - **260603-wtjc — retired the release-side help-dump push to shll.ai.** The release workflow used to walk the Cobra tree, write `help/idea.json`, and open an auto-merged PR into `sahil87/shll.ai` via a `sahil87` PAT (`SHLLAI_TOKEN`). That step was removed once shll.ai went to a pull model: shll.ai now `brew install`s `idea`, runs `idea help-dump`, and commits the JSON on its own schedule, so the push raced/duplicated the pull and kept an unnecessary cross-repo write path and credential alive. *Transport only* — the `help-dump` command and its JSON contract are unchanged (`schema_version` still `1`). **Follow-up (manual, not done by the PR):** delete the now-unused repo secret — `gh secret delete SHLLAI_TOKEN --repo sahil87/idea` — no workflow references it.
+- **260608-3ra7 — conformed the repo to shll.ai's README-extraction contract.** Absolutized the README's external `docs/specs/` links (relative links 404 on the rendered page) and added a `docs/site/**` tree (`install.md`, `workflows.md`) that shll.ai pulls and renders at `/tools/idea/install` and `/tools/idea/workflows`. *Repo structure only* — no Go code, tests, CLI behavior, or CI changed. The durable editing constraints this imposes (absolute external links, no reserved page slugs, no mermaid/theme-fragments) are captured above under "shll.ai tool page: README + `docs/site/**` are also pulled and rendered"; the authoritative rules stay in the shll.ai contract, not duplicated here.
 
 ## Cross-references
 
 - Source layout assumed by the build path (`./cmd/idea`) and version-stamp wiring (`-X main.version=...`): see `../cli/structure.md`.
 - The hidden `help-dump` subcommand that shll.ai pulls, and the frozen JSON contract it emits: `../cli/structure.md`.
+- shll.ai's README-extraction contract (the source of truth for how `README.md` + `docs/site/**` must be structured to render cleanly): <https://github.com/sahil87/shll.ai/blob/main/docs/specs/readme-extraction-contract.md>.
