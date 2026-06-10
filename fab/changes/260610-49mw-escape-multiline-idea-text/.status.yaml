@@ -1,0 +1,51 @@
+id: 49mw
+name: 260610-49mw-escape-multiline-idea-text
+created: 2026-06-10T15:07:25Z
+created_by: sahil-noon
+change_type: fix
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: done
+    review-pr: active
+plan:
+    generated: true
+    task_count: 9
+    acceptance_count: 17
+    acceptance_completed: 17
+confidence:
+    certain: 10
+    confident: 3
+    tentative: 1
+    unresolved: 0
+    score: 3.1
+    fuzzy: true
+    dimensions:
+        signal: 83.6
+        reversibility: 82.9
+        competence: 87.9
+        disambiguation: 85.0
+stage_metrics:
+    intake: {started_at: "2026-06-10T15:07:25Z", driver: fab-new, iterations: 1, completed_at: "2026-06-10T15:12:45Z"}
+    apply: {started_at: "2026-06-10T15:12:45Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-10T15:25:02Z"}
+    review: {started_at: "2026-06-10T15:25:02Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-10T15:39:00Z"}
+    hydrate: {started_at: "2026-06-10T15:39:00Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-10T15:45:43Z"}
+    ship: {started_at: "2026-06-10T15:45:43Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-10T15:50:16Z"}
+    review-pr: {started_at: "2026-06-10T15:50:16Z", driver: git-pr, iterations: 1}
+prs:
+    - https://github.com/sahil87/idea/pull/15
+true_impact:
+    added: 0
+    deleted: 0
+    net: 0
+    excluding:
+        added: 0
+        deleted: 0
+        net: 0
+    computed_at: "2026-06-10T15:45:43Z"
+    computed_at_stage: hydrate
+# true_impact: lazily created on first apply-finish (no placeholder here).
+last_updated: 2026-06-10T15:50:16Z

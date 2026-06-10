@@ -33,7 +33,9 @@ current worktree's backlog; --main targets the main worktree's backlog, and
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Added: [%s] %s: %s\n", i.ID, i.Date, i.Text)
+			// Print the escaped single-line form: stdout stays one
+			// machine-parseable line even for multiline idea text.
+			fmt.Printf("Added: [%s] %s: %s\n", i.ID, i.Date, idea.EscapeText(i.Text))
 			return nil
 		},
 	}

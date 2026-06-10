@@ -43,7 +43,9 @@ formatted line. --main targets the main worktree's backlog, and
 				return enc.Encode(i)
 			}
 
-			fmt.Println(idea.FormatLine(i))
+			// DisplayLine renders the real (unescaped) text, so multiline
+			// ideas show their continuation lines below the prefix line.
+			fmt.Println(idea.DisplayLine(i))
 			return nil
 		},
 	}

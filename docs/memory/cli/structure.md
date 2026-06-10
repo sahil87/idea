@@ -1,3 +1,7 @@
+---
+description: CLI source structure (cmd/idea + internal/idea + version wiring), the backlog line lifecycle (lenient-read / canonical-write parse-format-save contract incl. the escaped-text convention for multiline ideas), and per-subcommand notes
+---
+
 # CLI Source Structure
 
 `idea` is a single-binary Go repo. The source tree under `src/` follows the convention used by `hop` (and other single-binary Go repos in this account): one repo-level `go.mod`, the cobra entry under `cmd/<bin>/`, and the package logic under `internal/<bin>/`.
@@ -80,15 +84,52 @@ The `[ ]`/`[x]` checkbox plus the 4-char `[a-z0-9]{4}` id are the anchors that k
 
 **Shape B precision guard.** Legacy "Shape B" second-bracket lines (`- [ ] [id] [DEV-1011] date: text`) — and, by extension, any captured text beginning with a `[...]` bracket — stay **inert pass-through**. `ParseLine` rejects them via `shapeBPrefixRegex` (`^\[[^\]]*\]` against the captured text group), returning `ok=false` so they are preserved verbatim. The `[issue_ids]` slot is owned by external consumers (fab-kit's `/fab-new`); idea must neither parse nor rewrite these lines. Erring toward preservation is safer than rewriting an external tool's line.
 
+### Escaped text (multiline ideas)
+
+Idea text is **escaped on write, unescaped on read**, so an idea whose text contains newlines still occupies exactly one physical line. Established by `260610-49mw-escape-multiline-idea-text`, which fixed raw multiline pastes silently corrupting the backlog (truncation to the first line, orphaned continuation prose that `rm`/`edit` never touched, and phantom ideas when a pasted line itself matched `lineRegex`). Exactly two escape sequences exist, applied to idea text only — never to non-idea pass-through lines:
+
+| In-memory character | Persisted sequence (2 chars) |
+|---------------------|------------------------------|
+| `\` backslash (U+005C) | `\\` |
+| LF (U+000A) | `\n` |
+
+The helpers are exported from `internal/idea` and built on package-level `strings.Replacer` pairs (`textEscaper`/`textUnescaper`) — stdlib-only, single deterministic left-to-right pass:
+
+- **`EscapeText`** (write direction): CR normalization first (`normalizeCR`: CRLF → LF, then any remaining lone CR → LF), then `\` → `\\` and LF → `\n`. The result contains no raw LF or CR by construction, so a persisted idea line is always one physical line and always matches the single-line `lineRegex`. No raw CR ever reaches the file.
+- **`UnescapeText`** (read direction, lenient): `\\` → `\`, `\n` → LF; a backslash followed by any **other** character (e.g. `\b` stays `\b`) and a trailing lone `\` pass through verbatim — unrecognized escapes never error. The Replacer's copy-through-unmatched-bytes behavior implements this leniency exactly.
+- **Round-trip law**: `UnescapeText(EscapeText(x)) == x` for any CR-free `x` (including backslash-heavy text like `C:\new`, `a\\b`, trailing `\`); for `x` containing CR it equals `normalizeCR(x)` — CR→LF normalization is the only deliberate loss. `Add` and `Edit` also call `normalizeCR` on incoming text before storing it, so the in-memory `Idea` always equals what round-trips from disk.
+
+**In-memory real, on-disk escaped.** `ParseLine` applies `UnescapeText` to the captured text group — *after* the Shape B precision guard, which evaluates the raw on-disk text. `Idea.Text` therefore always holds the **real** text (raw newlines, raw backslashes) while the file holds the escaped form. Consequences: `MarshalJSON` needed no change (JSON encodes the newlines itself, so `--json` output carries real newlines in `text`), and `Match`/query semantics operate on the real text the user typed.
+
+**Display semantics per command:**
+
+| Output | Form |
+|--------|------|
+| `idea list` (incl. `--done`, `--all`) | escaped one line per idea via `FormatLine` — the line-per-record guarantee for external pipelines |
+| `idea show` (plain) | `DisplayLine` — real newlines; continuation lines render below the `- [x] [id] date: ` prefix line |
+| `list --json` / `show --json` | real newlines in the `text` field (unchanged `MarshalJSON`) |
+| confirmations — `Added:` (via `idea.EscapeText` in `cmd/idea/add.go`); `Updated:`/`Done:`/`Removed:`/`Reopened:` (via `FormatLine`) | escaped single line — stdout stays machine-parseable (Constitution VI) |
+
+**Legacy backslash policy (pre-convention files).** Lines written before the escape convention may contain literal backslashes:
+
+- Unrecognized escapes read **verbatim** (`a\b` reads as `a\b`).
+- On the next mutating save, in-memory `\` re-serializes as `\\` (on-disk `a\b` → `a\\b`) — content unchanged, only the encoding canonicalizes: a one-time normalize-on-write consistent with the precedent below. A second save is byte-stable (no further churn).
+- Accepted consequence: a legacy literal two-character `\n` inside text (e.g. `C:\new`) is reinterpreted on read as a real newline. This is unavoidable under any unescape-on-read scheme (the stored bytes are ambiguous with legacy data) and judged rare; re-saving is stable (the newline re-escapes to `\n`).
+
 ### Format / Save (canonical)
 
-`FormatLine` is the single source of output truth and is unchanged by the resilience work:
+The canonical format string lives in **one private formatter**, shared by two exported renderers so line-format knowledge never leaks out of `internal/idea` (Constitution IV; arrangement from `260610-49mw-escape-multiline-idea-text` — the earlier claim that `FormatLine` was untouched after the resilience work no longer holds):
 
 ```go
-return fmt.Sprintf("- [%s] [%s] %s: %s", i.StatusCheck(), i.ID, i.Date, i.Text)
+func formatLineWith(i Idea, text string) string {
+    return fmt.Sprintf("- [%s] [%s] %s: %s", i.StatusCheck(), i.ID, i.Date, text)
+}
 ```
 
-Output is always canonical: `- ` bullet, no leading whitespace, date present, single-space delimiters, LF line endings (`SaveFile` joins on `\n` and ends the file with a single trailing LF). Because `SaveFile` regenerates **every** recognized idea line from `FormatLine`, the first mutating command (`done`/`reopen`/`edit`/`rm`) normalizes the whole file at once: variant bullets → `-`, indentation stripped, CRLF → LF, dateless → dated. This **normalize-on-write** is a deliberate, accepted trade-off — a single `idea done` can produce a large git diff on a file with many variant/dateless lines. Non-idea lines (headers, blank lines, prose) pass through unchanged (Constitution Principle I).
+- `FormatLine(i)` = `formatLineWith(i, EscapeText(i.Text))` — the **persisted/escaped** form; the single source of on-disk output truth. Every write path inherits the one-physical-line guarantee through it: `Add`'s append, `SaveFile`'s rebuild, the confirmations, and `RequireSingle`'s multi-match error listing.
+- `DisplayLine(i)` = `formatLineWith(i, i.Text)` — the **real-text** form for human-facing display (plain `idea show`).
+
+Output is always canonical: `- ` bullet, no leading whitespace, date present, single-space delimiters, escaped text, LF line endings (`SaveFile` joins on `\n` and ends the file with a single trailing LF). Because `SaveFile` regenerates **every** recognized idea line from `FormatLine`, the first mutating command (`done`/`reopen`/`edit`/`rm`) normalizes the whole file at once: variant bullets → `-`, indentation stripped, CRLF → LF, dateless → dated, legacy lone backslashes → doubled (`\\`). This **normalize-on-write** is a deliberate, accepted trade-off — a single `idea done` can produce a large git diff on a file with many variant/dateless lines. Non-idea lines (headers, blank lines, prose) pass through unchanged (Constitution Principle I).
 
 **Date backfill on save.** `SaveFile` stamps `time.Now().Format("2006-01-02")` on any idea whose `Date == ""` *before* serializing, and returns `(count, error)` — the count of backfilled dates. Stamping at the save seam (not in `ParseLine`) keeps `ParseLine` pure and keeps `MarshalJSON` correct, since the in-memory `Idea` has a date by the time it is marshaled after a save. The write is atomic (temp file + rename) so a crash mid-write cannot leave the source-of-truth backlog partially written.
 
