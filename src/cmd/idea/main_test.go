@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -230,5 +231,102 @@ func TestDone_NoBackfillNoticeWhenDated(t *testing.T) {
 	}
 	if !strings.HasPrefix(stdout, "Done: ") {
 		t.Errorf("expected confirmation on stdout, got %q", stdout)
+	}
+}
+
+// TestAdd_MultilineTextSingleLine pins the multiline-escape contract end to
+// end: adding text with embedded newlines grows the backlog by exactly one
+// physical line and the Added: confirmation stays a single escaped line.
+func TestAdd_MultilineTextSingleLine(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+
+	text := "first line\n\nsecond paragraph\n- [ ] looks like a task"
+	stdout, stderr, err := runSplit(t, bin, repo, "add", "--id", "ab12", text)
+	if err != nil {
+		t.Fatalf("add failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if got := strings.Count(stdout, "\n"); got != 1 {
+		t.Errorf("Added: confirmation spans %d lines, want 1: %q", got, stdout)
+	}
+	if !strings.HasPrefix(stdout, "Added: [ab12]") {
+		t.Errorf("unexpected confirmation prefix: %q", stdout)
+	}
+	if !strings.Contains(stdout, `first line\n\nsecond paragraph\n- [ ] looks like a task`) {
+		t.Errorf("confirmation should carry the escaped text, got %q", stdout)
+	}
+
+	data, err := os.ReadFile(filepath.Join(repo, "fab", "backlog.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := strings.TrimSuffix(string(data), "\n")
+	if lines := strings.Split(content, "\n"); len(lines) != 2 { // "# Backlog" + 1 idea line
+		t.Errorf("backlog has %d physical lines, want 2:\n%q", len(lines), string(data))
+	}
+}
+
+// TestShow_MultilineRendersRealNewlines verifies plain show unescapes for
+// display while --json carries real newlines in the text field.
+func TestShow_MultilineRendersRealNewlines(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+	writeRepoBacklog(t, repo, "- [ ] [ab12] 2026-06-10: first line\\n\\nsecond paragraph\n")
+
+	stdout, stderr, err := runSplit(t, bin, repo, "show", "ab12")
+	if err != nil {
+		t.Fatalf("show failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	want := "- [ ] [ab12] 2026-06-10: first line\n\nsecond paragraph\n"
+	if stdout != want {
+		t.Errorf("show output:\ngot:  %q\nwant: %q", stdout, want)
+	}
+
+	jsonOut, _, err := runSplit(t, bin, repo, "show", "ab12", "--json")
+	if err != nil {
+		t.Fatalf("show --json failed: %v", err)
+	}
+	var decoded struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &decoded); err != nil {
+		t.Fatalf("decode show --json: %v\noutput=%q", err, jsonOut)
+	}
+	if decoded.Text != "first line\n\nsecond paragraph" {
+		t.Errorf("json text = %q, want real newlines", decoded.Text)
+	}
+}
+
+// TestList_MultilineStaysEscapedSingleLine verifies list keeps the
+// line-per-record guarantee: multiline ideas print in escaped form.
+func TestList_MultilineStaysEscapedSingleLine(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+	writeRepoBacklog(t, repo, "- [ ] [ab12] 2026-06-10: first line\\n\\nsecond paragraph\n")
+
+	stdout, stderr, err := runSplit(t, bin, repo, "list")
+	if err != nil {
+		t.Fatalf("list failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	want := "- [ ] [ab12] 2026-06-10: first line\\n\\nsecond paragraph\n"
+	if stdout != want {
+		t.Errorf("list output:\ngot:  %q\nwant: %q", stdout, want)
+	}
+}
+
+// TestEdit_MultilineSingleLineConfirmation verifies the Updated: confirmation
+// (via FormatLine) stays a single escaped line for multiline replacement text.
+func TestEdit_MultilineSingleLineConfirmation(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+	writeRepoBacklog(t, repo, "- [ ] [ab12] 2026-06-10: old text\n")
+
+	stdout, stderr, err := runSplit(t, bin, repo, "edit", "ab12", "new first\nnew second")
+	if err != nil {
+		t.Fatalf("edit failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	want := "Updated: - [ ] [ab12] 2026-06-10: new first\\nnew second\n"
+	if stdout != want {
+		t.Errorf("edit confirmation:\ngot:  %q\nwant: %q", stdout, want)
 	}
 }

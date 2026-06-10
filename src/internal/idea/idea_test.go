@@ -1393,3 +1393,314 @@ func TestSaveFile_PreservesNonIdeaLinesByteForByte(t *testing.T) {
 		t.Errorf("non-idea content not preserved byte-for-byte\ngot:  %q\nwant: %q", string(data), want)
 	}
 }
+
+// --- Escape/Unescape Tests (escape-on-write, unescape-on-display) ---
+
+func TestEscapeText(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain text untouched", "Add dark mode", "Add dark mode"},
+		{"LF becomes literal backslash-n", "first\nsecond", `first\nsecond`},
+		{
+			"multi-paragraph with idea-looking line",
+			"first line\n\nsecond paragraph\n- [ ] looks like a task",
+			`first line\n\nsecond paragraph\n- [ ] looks like a task`,
+		},
+		{"backslash doubles", `C:\new`, `C:\\new`},
+		{"doubled backslash quadruples", `a\\b`, `a\\\\b`},
+		{"trailing lone backslash doubles", `trailing\`, `trailing\\`},
+		{"literal backslash-n input", `a\nb`, `a\\nb`},
+		{"CRLF normalizes then escapes", "a\r\nb", `a\nb`},
+		{"lone CR normalizes then escapes", "a\rb", `a\nb`},
+		{"mixed CRLF and CR", "a\r\nb\rc", `a\nb\nc`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EscapeText(tt.in)
+			if got != tt.want {
+				t.Errorf("EscapeText(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+			if strings.ContainsAny(got, "\n\r") {
+				t.Errorf("EscapeText(%q) = %q contains raw LF/CR", tt.in, got)
+			}
+		})
+	}
+}
+
+func TestUnescapeText(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain text untouched", "Add dark mode", "Add dark mode"},
+		{"literal backslash-n becomes LF", `first\nsecond`, "first\nsecond"},
+		{"doubled backslash halves", `C:\\new`, `C:\new`},
+		{"escaped backslash before n stays literal", `a\\nb`, `a\nb`},
+		{"unrecognized escape passes through verbatim", `a\b`, `a\b`},
+		{"trailing lone backslash passes through verbatim", `trailing\`, `trailing\`},
+		{"legacy literal backslash-n reinterprets as newline", `C:\new`, "C:\new"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := UnescapeText(tt.in)
+			if got != tt.want {
+				t.Errorf("UnescapeText(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEscapeUnescapeRoundTrip pins the round-trip law:
+// UnescapeText(EscapeText(x)) == x for any CR-free x; for x containing CR it
+// equals the CR-normalized form (CR->LF is the only deliberate loss).
+func TestEscapeUnescapeRoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string // "" means: expect the input back unchanged
+	}{
+		{"plain text", "Add dark mode to settings page", ""},
+		{"multi-paragraph", "first line\n\nsecond paragraph\nthird", ""},
+		{"windows path", `C:\new`, ""},
+		{"doubled backslash", `a\\b`, ""},
+		{"trailing lone backslash", `trailing\`, ""},
+		{"literal backslash-n text", `a\nb`, ""},
+		{"backslash-heavy mix", `\\n vs \n and \`, ""},
+		{"idea-looking line", "- [ ] looks like a task", ""},
+		{"newline-only text", "\n", ""},
+		{"CRLF normalizes", "a\r\nb", "a\nb"},
+		{"lone CR normalizes", "a\rb", "a\nb"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := tt.want
+			if want == "" {
+				want = tt.in
+			}
+			got := UnescapeText(EscapeText(tt.in))
+			if got != want {
+				t.Errorf("UnescapeText(EscapeText(%q)) = %q, want %q", tt.in, got, want)
+			}
+		})
+	}
+}
+
+func TestFormatLine_EscapesMultilineText(t *testing.T) {
+	i := Idea{ID: "a7k2", Date: "2026-06-10", Text: "first line\n\nsecond paragraph\n- [ ] looks like a task"}
+	got := FormatLine(i)
+	want := `- [ ] [a7k2] 2026-06-10: first line\n\nsecond paragraph\n- [ ] looks like a task`
+	if got != want {
+		t.Errorf("FormatLine = %q, want %q", got, want)
+	}
+	if strings.Contains(got, "\n") {
+		t.Errorf("FormatLine output contains a raw newline: %q", got)
+	}
+}
+
+func TestParseLine_UnescapesText(t *testing.T) {
+	line := `- [ ] [a7k2] 2026-06-10: first line\n\nsecond paragraph`
+	i, ok := ParseLine(line)
+	if !ok {
+		t.Fatal("expected valid parse")
+	}
+	want := "first line\n\nsecond paragraph"
+	if i.Text != want {
+		t.Errorf("Text = %q, want %q", i.Text, want)
+	}
+}
+
+// TestParseFormatRoundTrip_Escaped pins that an escaped on-disk line survives
+// parse -> format byte-identical (no churn on already-canonical lines).
+func TestParseFormatRoundTrip_Escaped(t *testing.T) {
+	lines := []string{
+		`- [ ] [a7k2] 2026-06-10: first\n\nsecond paragraph`,
+		`- [x] [e5f6] 2026-06-10: path C:\\new here`,
+		`- [ ] [c3d4] 2026-06-10: plain single-line text`,
+	}
+	for _, line := range lines {
+		i, ok := ParseLine(line)
+		if !ok {
+			t.Fatalf("failed to parse %q", line)
+		}
+		if got := FormatLine(i); got != line {
+			t.Errorf("round-trip changed line:\ngot:  %q\nwant: %q", got, line)
+		}
+	}
+}
+
+func TestDisplayLine_RendersRealNewlines(t *testing.T) {
+	i := Idea{ID: "a7k2", Date: "2026-06-10", Text: "first line\n\nsecond paragraph", Done: false}
+	got := DisplayLine(i)
+	want := "- [ ] [a7k2] 2026-06-10: first line\n\nsecond paragraph"
+	if got != want {
+		t.Errorf("DisplayLine = %q, want %q", got, want)
+	}
+}
+
+// TestAdd_MultilineText pins the core fix: a multiline add lands as exactly
+// one physical line, parses as exactly one idea (no phantom from the embedded
+// idea-looking line), and round-trips the full text.
+func TestAdd_MultilineText(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "backlog.md")
+	text := "first line\n\nsecond paragraph\n- [ ] looks like a task"
+
+	i, err := Add(path, text, "", "")
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if i.Text != text {
+		t.Errorf("in-memory Text = %q, want %q", i.Text, text)
+	}
+
+	data, _ := os.ReadFile(path)
+	content := strings.TrimSuffix(string(data), "\n")
+	if lines := strings.Split(content, "\n"); len(lines) != 1 {
+		t.Fatalf("file has %d physical lines, want 1:\n%q", len(lines), string(data))
+	}
+
+	f, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if len(f.ideas) != 1 {
+		t.Fatalf("parsed %d ideas, want 1 (phantom idea?)", len(f.ideas))
+	}
+	if f.ideas[0].Text != text {
+		t.Errorf("reloaded Text = %q, want %q", f.ideas[0].Text, text)
+	}
+}
+
+func TestAdd_NormalizesCR(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "backlog.md")
+
+	i, err := Add(path, "a\r\nb\rc", "", "")
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if i.Text != "a\nb\nc" {
+		t.Errorf("Text = %q, want %q", i.Text, "a\nb\nc")
+	}
+
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `a\nb\nc`) {
+		t.Errorf("file should contain escaped normalized text, got %q", string(data))
+	}
+	if strings.Contains(string(data), "\r") {
+		t.Errorf("raw CR reached the file: %q", string(data))
+	}
+}
+
+func TestEdit_MultilineText(t *testing.T) {
+	dir := t.TempDir()
+	content := "# Backlog\n\n- [ ] [a7k2] 2025-06-15: old text\n\nFooter\n"
+	path := writeBacklog(t, dir, content)
+	text := "new first\n\nnew second paragraph"
+
+	i, _, err := Edit(path, "a7k2", text, "", "")
+	if err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+	if i.Text != text {
+		t.Errorf("in-memory Text = %q, want %q", i.Text, text)
+	}
+
+	want := "# Backlog\n\n" + `- [ ] [a7k2] 2025-06-15: new first\n\nnew second paragraph` + "\n\nFooter\n"
+	data, _ := os.ReadFile(path)
+	if string(data) != want {
+		t.Errorf("file after multiline edit:\ngot:  %q\nwant: %q", string(data), want)
+	}
+}
+
+// TestRm_MultilineIdea_NoOrphans pins the orphaning fix: removing a multiline
+// idea removes everything — no continuation residue is left in the file.
+func TestRm_MultilineIdea_NoOrphans(t *testing.T) {
+	dir := t.TempDir()
+	original := "# Backlog\n"
+	path := writeBacklog(t, dir, original)
+
+	if _, err := Add(path, "first line\n\nsecond paragraph\n- [ ] looks like a task", "ab12", ""); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if _, _, err := Rm(path, "ab12", true); err != nil {
+		t.Fatalf("Rm: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	got := string(data)
+	if got != original {
+		t.Errorf("file after rm = %q, want %q (no orphaned residue)", got, original)
+	}
+}
+
+// TestLegacyBackslash_NormalizeOnWrite pins the legacy policy: lone-backslash
+// text reads verbatim, re-serializes doubled on the first mutating save, and
+// the second save is byte-stable (no further churn).
+func TestLegacyBackslash_NormalizeOnWrite(t *testing.T) {
+	dir := t.TempDir()
+	path := writeBacklog(t, dir, `- [ ] [a7k2] 2025-06-15: path a\b here`+"\n")
+
+	// Read: unrecognized escape passes through verbatim.
+	f, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if want := `path a\b here`; f.ideas[0].Text != want {
+		t.Errorf("legacy Text = %q, want %q", f.ideas[0].Text, want)
+	}
+
+	// First mutating save: on-disk encoding canonicalizes to doubled backslash.
+	if _, _, err := Done(path, "a7k2"); err != nil {
+		t.Fatalf("Done: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	first := string(data)
+	if want := `- [x] [a7k2] 2025-06-15: path a\\b here` + "\n"; first != want {
+		t.Errorf("after first save:\ngot:  %q\nwant: %q", first, want)
+	}
+
+	// Content unchanged: still reads back as the same real text.
+	f, err = LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if want := `path a\b here`; f.ideas[0].Text != want {
+		t.Errorf("reloaded Text = %q, want %q", f.ideas[0].Text, want)
+	}
+
+	// Second save: byte-stable, no further churn.
+	if _, _, err := Reopen(path, "a7k2"); err != nil {
+		t.Fatalf("Reopen: %v", err)
+	}
+	if _, _, err := Done(path, "a7k2"); err != nil {
+		t.Fatalf("Done: %v", err)
+	}
+	data, _ = os.ReadFile(path)
+	if string(data) != first {
+		t.Errorf("second save churned the file:\ngot:  %q\nwant: %q", string(data), first)
+	}
+}
+
+// TestIdeaJSON_MultilineText pins that the JSON text field carries real
+// newlines (JSON itself encodes them), since Idea.Text holds real text.
+func TestIdeaJSON_MultilineText(t *testing.T) {
+	i := Idea{ID: "a7k2", Date: "2026-06-10", Text: "first\nsecond", Done: false}
+	data, err := json.Marshal(i)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var decoded struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded.Text != "first\nsecond" {
+		t.Errorf("decoded text = %q, want %q", decoded.Text, "first\nsecond")
+	}
+}

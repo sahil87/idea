@@ -1,0 +1,15 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-10T15:07:25Z"}
+{"args":"escape multiline text in backlog lines: idea add/edit accept embedded newlines and write them raw into fab/backlog.md, causing silent truncation, orphaned continuation lines, and phantom ideas. Fix: escape on write (LF -\u003e \\n, backslash -\u003e \\\\), unescape on display; one physical line per idea preserved.","cmd":"fab-new","event":"command","ts":"2026-06-10T15:07:25Z"}
+{"delta":"+3.1","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-06-10T15:10:51Z"}
+{"delta":"+0.0","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-06-10T15:11:03Z"}
+{"cmd":"fab-new","event":"command","ts":"2026-06-10T15:11:03Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-06-10T15:12:38Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-06-10T15:12:45Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-06-10T15:13:19Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-06-10T15:25:02Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-06-10T15:25:28Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-06-10T15:39:00Z"}
+{"event":"review","result":"passed","ts":"2026-06-10T15:39:00Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-06-10T15:39:29Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-10T15:45:43Z"}
+{"cmd":"git-pr","event":"command","ts":"2026-06-10T15:46:36Z"}

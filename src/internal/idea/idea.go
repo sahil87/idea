@@ -99,6 +99,50 @@ func ValidateDate(date string) error {
 	return nil
 }
 
+// textEscaper converts real idea text to its persisted single-line form.
+// Exactly two escape sequences exist: backslash (U+005C) -> `\\` and
+// LF (U+000A) -> `\n`. The single left-to-right pass cannot double-process:
+// the literal backslashes it emits are never re-examined.
+var textEscaper = strings.NewReplacer(`\`, `\\`, "\n", `\n`)
+
+// textUnescaper is the exact inverse for text produced by textEscaper:
+// `\\` -> backslash, `\n` -> LF. The two patterns differ in their second
+// byte, so at most one matches at any position — the single pass is
+// deterministic. Bytes matching neither pattern are copied through verbatim,
+// which implements the lenient legacy policy: an unrecognized escape (e.g.
+// `\b`) and a trailing lone `\` pass through unchanged.
+var textUnescaper = strings.NewReplacer(`\\`, `\`, `\n`, "\n")
+
+// normalizeCR canonicalizes line endings inside idea text: CRLF -> LF first,
+// then any remaining lone CR -> LF. No raw CR ever reaches the backlog file;
+// this CR->LF normalization is the only deliberate loss in the escape
+// round-trip (see EscapeText).
+func normalizeCR(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return strings.ReplaceAll(s, "\r", "\n")
+}
+
+// EscapeText converts real idea text to the persisted single-line form:
+// CR normalization (CRLF -> LF, lone CR -> LF) followed by escaping
+// (`\` -> `\\`, LF -> `\n`). The result contains no raw LF or CR, so a
+// persisted idea line is always exactly one physical line.
+//
+// Round-trip law: UnescapeText(EscapeText(x)) == x for any CR-free x;
+// for x containing CR it equals the CR-normalized form of x.
+func EscapeText(s string) string {
+	return textEscaper.Replace(normalizeCR(s))
+}
+
+// UnescapeText converts persisted idea text back to its real form in a
+// single left-to-right scan: `\\` -> `\`, `\n` -> LF. A backslash followed
+// by any other character — and a trailing lone backslash — pass through
+// verbatim, so legacy text written before the escape convention reads
+// unchanged (it canonicalizes to doubled backslashes on the next mutating
+// save via FormatLine, the normalize-on-write precedent).
+func UnescapeText(s string) string {
+	return textUnescaper.Replace(s)
+}
+
 // ParseLine parses a single backlog line into an Idea.
 // Returns the parsed idea and true if the line is valid, or a zero Idea and false.
 //
@@ -126,15 +170,33 @@ func ParseLine(line string) (Idea, bool) {
 	}
 	return Idea{
 		ID:   m[2],
-		Date: m[3], // "" when the optional date segment is absent
-		Text: m[4],
+		Date: m[3],               // "" when the optional date segment is absent
+		Text: UnescapeText(m[4]), // in-memory Idea.Text always holds real text
 		Done: m[1] == "x",
 	}, true
 }
 
+// formatLineWith renders the canonical line shape around the given text
+// representation. It is the single home of the format string, shared by
+// FormatLine (escaped, persisted form) and DisplayLine (real-text form).
+func formatLineWith(i Idea, text string) string {
+	return fmt.Sprintf("- [%s] [%s] %s: %s", i.StatusCheck(), i.ID, i.Date, text)
+}
+
 // FormatLine serializes an Idea back to the markdown line format.
+// The text is escaped (see EscapeText), so the output is always exactly one
+// physical line — every write path (Add's append, SaveFile's rebuild,
+// confirmations, RequireSingle's match listing) inherits the guarantee here.
 func FormatLine(i Idea) string {
-	return fmt.Sprintf("- [%s] [%s] %s: %s", i.StatusCheck(), i.ID, i.Date, i.Text)
+	return formatLineWith(i, EscapeText(i.Text))
+}
+
+// DisplayLine renders an Idea in the canonical line shape with its real
+// (unescaped) text, so multiline ideas show their continuation lines below
+// the prefix line. Used for human-facing display (idea show); machine-facing
+// output keeps the escaped single-line FormatLine form.
+func DisplayLine(i Idea) string {
+	return formatLineWith(i, i.Text)
 }
 
 // MainRepoRoot returns the main worktree's root directory.
@@ -390,6 +452,10 @@ func Add(path, text, customID, customDate string) (Idea, error) {
 		return Idea{}, fmt.Errorf("text is required")
 	}
 
+	// Normalize line endings up front so the in-memory Idea.Text equals what
+	// round-trips from disk (FormatLine escapes on write; CR never survives).
+	text = normalizeCR(text)
+
 	// Validate custom ID format if provided
 	if customID != "" {
 		if err := ValidateID(customID); err != nil {
@@ -615,6 +681,10 @@ func Edit(path, query, newText, newID, newDate string) (Idea, int, error) {
 	if newText == "" {
 		return Idea{}, 0, fmt.Errorf("text is required")
 	}
+
+	// Normalize line endings up front so the in-memory Idea.Text equals what
+	// round-trips from disk (FormatLine escapes on write; CR never survives).
+	newText = normalizeCR(newText)
 
 	f, err := LoadFile(path)
 	if err != nil {

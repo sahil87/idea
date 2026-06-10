@@ -14,10 +14,31 @@ Every idea line that `idea` writes (or rewrites) uses this single canonical shap
 - `[ ]` for open, `[x]` for completed.
 - `[{ID}]` — the 4-character lowercase alphanumeric backlog ID.
 - `{YYYY-MM-DD}` — ISO date, **always present** in output (backfilled if the input had none; see [Date backfill](#date-backfill-on-write)).
-- `{description}` — free-form description text.
+- `{description}` — free-form description text, in **escaped form** (see [Escaped Text in the Description](#escaped-text-in-the-description)).
 - LF line endings; the file ends with a single trailing LF.
 
 This canonical form is the stable, machine-parseable output contract. External tooling that reads `fab/backlog.md` can rely on it.
+
+## Escaped Text in the Description
+
+The `{description}` field of a canonical line is **escaped**, so an idea always occupies exactly one physical line — even when its text contains newlines. Exactly two escape sequences exist in canonical output:
+
+| Real character | Persisted sequence (2 chars) |
+|----------------|------------------------------|
+| `\` backslash (U+005C) | `\\` |
+| newline (LF, U+000A) | `\n` |
+
+Carriage returns never appear in output: CRLF and lone CR in input text are normalized to LF *before* escaping, so no raw CR — and, after escaping, no raw LF — is ever written into an idea line.
+
+**Recovering the real text (consumers).** To decode a description, scan left-to-right: `\\` → `\` and `\n` → LF. A backslash followed by any **other** character (e.g. `\b`) passes through verbatim, as does a trailing lone `\` — unrecognized escapes are never an error; decoding is lenient by design.
+
+Worked example — adding an idea whose real text is `first line`, a blank line, then `second paragraph` persists as **one** physical line (each `\n` below is the literal two-character sequence):
+
+```
+- [ ] [a7k2] 2026-06-10: first line\n\nsecond paragraph
+```
+
+The **one-physical-line-per-idea guarantee is unchanged** by the escape convention — line-by-line consumers keep working with zero structural churn. `idea list` prints the escaped canonical form (preserving the line-per-record guarantee), plain `idea show` renders the real newlines, and JSON output (`--json`) carries real newlines in the `text` field (JSON applies its own encoding).
 
 ## Accepted Input Variants (lenient read)
 
@@ -74,6 +95,7 @@ The notice is suppressed entirely when no dates were backfilled.
 - leading indentation → stripped
 - CRLF → LF
 - dateless → dated (today)
+- legacy lone backslashes in description text → doubled (`a\b` → `a\\b` on disk; the decoded content is unchanged)
 
 This is a deliberate, accepted trade-off. A single `idea done` on one item can therefore produce a larger git diff if the file had many variant or dateless lines. **Non-mutating** commands (`list`, `show`) never rewrite the file, so pure reads are diff-free.
 
@@ -106,5 +128,7 @@ The file is meant to be hand-edited; `idea` exists to reduce friction over hand-
 - **Input** is liberal: `idea` accepts the variants listed above. This is a strict *widening* of what previously parsed — no line that was valid before stops parsing.
 
 > **Format-contract change note.** Earlier versions of this spec declared the date a mandatory part of the line and described an idea-managed "Shape A" that *required* the date. As of the resilient-parser change (`260610-wtmn-resilient-backlog-parser`), the date is **optional on input** and **canonical (always present) on output**, and `idea` additionally accepts `*`/`+` bullets, leading whitespace, and CRLF endings on input. This widens the input contract and was a deliberate, documented change to fix silent-failure on dateless backlogs (e.g. the shll.ai backlog). The **output** contract is unchanged: `idea` still emits exactly one canonical, machine-parseable form. Shape B second-bracket lines remain inert pass-through, exactly as before.
+
+> **Format-contract change note.** As of the multiline-escape change (`260610-49mw-escape-multiline-idea-text`), the `{description}` field is **escaped** in canonical output: backslash persists as `\\` and newline as `\n`, with CRLF/lone CR normalized to LF before escaping (see [Escaped Text in the Description](#escaped-text-in-the-description)). Structurally nothing changed — still exactly one physical line per idea in the same canonical shape — so line-by-line consumers are unaffected; consumers that display raw description text will show escape sequences for multiline ideas (that *is* the canonical form). Descriptions written before this convention decode leniently (unrecognized escapes pass through verbatim) and canonicalize on the next mutating save: lone backslashes double (`a\b` → `a\\b` on disk, decoded content unchanged), and a second save is byte-stable. One rare, accepted consequence: a legacy description containing the literal two-character sequence `\n` (e.g. `C:\new`) is reinterpreted as a real newline on read.
 
 See also [Constitution principle I](../../fab/project/constitution.md) on plain-text backlog preservation.
