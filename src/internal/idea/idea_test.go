@@ -1143,6 +1143,36 @@ func TestParseLine_PrecisionGuard(t *testing.T) {
 	}
 }
 
+// TestParseLine_DatedBracketPrefixedTextParses guards R6's precision: the Shape B
+// guard must apply only to DATELESS matches. A genuine canonical line whose
+// description happens to begin with a bracket (date present) must still parse,
+// not be dropped as pass-through.
+func TestParseLine_DatedBracketPrefixedTextParses(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		wantDate string
+		wantText string
+	}{
+		{"dated bracket text", "- [ ] [a7k2] 2025-06-15: [TODO] Add dark mode", "2025-06-15", "[TODO] Add dark mode"},
+		{"dated bracket text done", "- [x] [e5f6] 2025-06-08: [WIP] refactor parser", "2025-06-08", "[WIP] refactor parser"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idea, ok := ParseLine(tt.line)
+			if !ok {
+				t.Fatalf("ParseLine(%q) = ok=false, want true (dated bracket-prefixed text must parse)", tt.line)
+			}
+			if idea.Date != tt.wantDate {
+				t.Errorf("Date = %q, want %q", idea.Date, tt.wantDate)
+			}
+			if idea.Text != tt.wantText {
+				t.Errorf("Text = %q, want %q", idea.Text, tt.wantText)
+			}
+		})
+	}
+}
+
 // TestLoadFile_CRLF pins R4: CRLF lines parse, \r never leaks into Text, and
 // output is LF-only after a save.
 func TestLoadFile_CRLF(t *testing.T) {
@@ -1186,6 +1216,9 @@ func TestSaveFile_BackfillsDatelessDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
+	// Capture today before the code under test stamps the backfill date, so a
+	// midnight rollover between save and assertion cannot flake the test.
+	today := time.Now().Format("2006-01-02")
 	backfilled, err := SaveFile(f, path)
 	if err != nil {
 		t.Fatalf("SaveFile: %v", err)
@@ -1194,7 +1227,6 @@ func TestSaveFile_BackfillsDatelessDate(t *testing.T) {
 		t.Errorf("backfilled = %d, want 2", backfilled)
 	}
 
-	today := time.Now().Format("2006-01-02")
 	data, _ := os.ReadFile(path)
 	got := string(data)
 	if !strings.Contains(got, "- [ ] [rk7t] "+today+": Tune the reporter") {
@@ -1236,6 +1268,9 @@ func TestDone_BackfillsAndCanonicalizes(t *testing.T) {
 	content := "- [ ] [rk7t] Tune the README-extraction reporter\n"
 	path := writeBacklog(t, dir, content)
 
+	// Capture today before Done backfills/saves, so a midnight rollover between
+	// the save and the assertions cannot flake the test.
+	today := time.Now().Format("2006-01-02")
 	i, backfilled, err := Done(path, "rk7t")
 	if err != nil {
 		t.Fatalf("Done: %v", err)
@@ -1243,7 +1278,6 @@ func TestDone_BackfillsAndCanonicalizes(t *testing.T) {
 	if backfilled != 1 {
 		t.Errorf("backfilled = %d, want 1", backfilled)
 	}
-	today := time.Now().Format("2006-01-02")
 	if i.Date != today {
 		t.Errorf("returned idea Date = %q, want today %q", i.Date, today)
 	}
@@ -1260,6 +1294,9 @@ func TestEdit_BackfillsDatelessDate(t *testing.T) {
 	content := "- [ ] [rk7t] original text\n"
 	path := writeBacklog(t, dir, content)
 
+	// Capture today before Edit backfills/saves, so a midnight rollover between
+	// the save and the assertion cannot flake the test.
+	today := time.Now().Format("2006-01-02")
 	i, backfilled, err := Edit(path, "rk7t", "new text", "", "")
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
@@ -1267,7 +1304,6 @@ func TestEdit_BackfillsDatelessDate(t *testing.T) {
 	if backfilled != 1 {
 		t.Errorf("backfilled = %d, want 1", backfilled)
 	}
-	today := time.Now().Format("2006-01-02")
 	if i.Date != today {
 		t.Errorf("Date = %q, want today %q", i.Date, today)
 	}

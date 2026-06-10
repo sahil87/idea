@@ -114,10 +114,14 @@ func ParseLine(line string) (Idea, bool) {
 	// matches the relaxed regex with the second bracket captured into the text
 	// group. Reject it so it stays inert pass-through — the [issue_ids] slot is
 	// owned by external consumers, and idea must not parse or rewrite these lines.
-	// By design, ANY text beginning with a bracket (e.g. `[TODO] do thing`) is
-	// treated as pass-through too: we cannot distinguish it from an issue-id slot,
-	// and erring toward preservation is safer than rewriting an external tool's line.
-	if shapeBPrefixRegex.MatchString(m[4]) {
+	//
+	// The guard only applies to DATELESS matches (m[3] == ""): a Shape B line
+	// cannot have a parsed date because the second bracket sits between the id and
+	// the date segment, so the date never reaches m[3]. Restricting to m[3] == ""
+	// means a genuine canonical line whose description happens to start with a
+	// bracket (e.g. `- [ ] [a7k2] 2025-06-15: [TODO] do thing`) still parses —
+	// its date is captured into m[3], so it is not mistaken for a Shape B slot.
+	if m[3] == "" && shapeBPrefixRegex.MatchString(m[4]) {
 		return Idea{}, false
 	}
 	return Idea{
