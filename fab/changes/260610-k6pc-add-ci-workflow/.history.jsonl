@@ -1,0 +1,15 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-10T09:41:30Z"}
+{"args":"Add a CI workflow (.github/workflows/ci.yml) to idea that runs on pull_request and push-to-main, mirroring wt's ci.yml: gofmt -l check, go vet ./..., and go test ./... in src/ using go-version-file src/go.mod; concurrency with cancel-in-progress keyed on github.ref; ci-gate job (needs:[test], if:always()) as a single stable required status check; pin actions to SHAs (actions/checkout v4, actions/setup-go v5).","cmd":"fab-new","event":"command","ts":"2026-06-10T09:41:30Z"}
+{"delta":"+3.7","event":"confidence","score":3.7,"trigger":"calc-score","ts":"2026-06-10T09:42:14Z"}
+{"delta":"+0.0","event":"confidence","score":3.7,"trigger":"calc-score","ts":"2026-06-10T09:42:19Z"}
+{"cmd":"fab-new","event":"command","ts":"2026-06-10T09:42:19Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-06-10T09:42:54Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-06-10T09:42:54Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-06-10T09:44:00Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-06-10T09:47:52Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-06-10T09:50:03Z"}
+{"event":"review","result":"passed","ts":"2026-06-10T09:50:03Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-06-10T09:50:38Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-10T09:52:30Z"}
+{"cmd":"git-pr","event":"command","ts":"2026-06-10T09:53:11Z"}
+{"action":"enter","driver":"git-pr","event":"stage-transition","stage":"review-pr","ts":"2026-06-10T09:55:05Z"}
