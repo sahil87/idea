@@ -2,14 +2,13 @@ agent:
     spawn_command: claude --dangerously-skip-permissions --effort xhigh -n "$(basename "$(pwd)")"
 checklist:
     extra_categories: []
-fab_version: 2.0.1
+fab_version: 2.1.2
 project:
     description: Backlog idea management CLI (extracted from fab-kit) — worktree-aware tracker for per-repo idea lists.
     name: idea
 source_paths:
     - src/go/idea
     - scripts
-true_impact_exclude: [fab/, docs/]
 stage_directives:
     apply:
         - Follow Go standard formatting (gofmt)
@@ -20,3 +19,6 @@ stage_directives:
     hydrate: []
     intake: []
     review: []
+true_impact_exclude:
+    - fab/
+    - docs/
