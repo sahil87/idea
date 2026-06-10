@@ -189,6 +189,82 @@ func runSplit(t *testing.T, bin, repo string, args ...string) (stdout, stderr st
 	return outBuf.String(), errBuf.String(), err
 }
 
+// readRepoBacklog returns the current contents of the repo's fab/backlog.md.
+func readRepoBacklog(t *testing.T, repo string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(repo, "fab", "backlog.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// TestRouting_LsAliasAndBareShorthand verifies command routing: "ls" resolves
+// to the list subcommand (never the root bare-text add shorthand, which would
+// silently append a junk "ls" idea), while bare text starting with a non-alias
+// word still routes to add.
+func TestRouting_LsAliasAndBareShorthand(t *testing.T) {
+	bin := buildBinary(t)
+
+	tests := []struct {
+		name       string
+		args       []string
+		equivalent []string // when non-nil, stdout must match running these args on the same repo state
+		wantAdded  string   // when non-empty, the backlog must gain an idea containing this text
+	}{
+		{
+			name:       "ls routes to list",
+			args:       []string{"ls"},
+			equivalent: []string{"list"},
+		},
+		{
+			name:       "ls --json routes to list --json",
+			args:       []string{"ls", "--json"},
+			equivalent: []string{"list", "--json"},
+		},
+		{
+			name:      "non-alias bare text routes to add shorthand",
+			args:      []string{"lsx", "some", "text"},
+			wantAdded: "lsx some text",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			writeRepoBacklog(t, repo, "# Backlog\n\n- [ ] [ab12] 2026-06-01: seeded idea\n")
+			before := readRepoBacklog(t, repo)
+
+			stdout, stderr, err := runSplit(t, bin, repo, tt.args...)
+			if err != nil {
+				t.Fatalf("%v failed: %v\nstdout=%q stderr=%q", tt.args, err, stdout, stderr)
+			}
+
+			if tt.equivalent != nil {
+				wantOut, wantErr, eqErr := runSplit(t, bin, repo, tt.equivalent...)
+				if eqErr != nil {
+					t.Fatalf("%v failed: %v\nstdout=%q stderr=%q", tt.equivalent, eqErr, wantOut, wantErr)
+				}
+				if stdout != wantOut {
+					t.Errorf("%v stdout = %q, want %q (output of %v)", tt.args, stdout, wantOut, tt.equivalent)
+				}
+			}
+
+			after := readRepoBacklog(t, repo)
+			if tt.wantAdded != "" {
+				if !strings.HasPrefix(stdout, "Added: [") {
+					t.Errorf("expected 'Added: [' prefix on stdout, got %q", stdout)
+				}
+				if !strings.Contains(after, tt.wantAdded) {
+					t.Errorf("expected backlog to gain idea %q, got:\n%s", tt.wantAdded, after)
+				}
+			} else if after != before {
+				t.Errorf("backlog changed by %v:\nbefore:\n%s\nafter:\n%s", tt.args, before, after)
+			}
+		})
+	}
+}
+
 // TestDone_BackfillNoticeOnStderr verifies the advisory backfill notice goes to
 // stderr (with the correct count) while stdout carries only the confirmation.
 func TestDone_BackfillNoticeOnStderr(t *testing.T) {

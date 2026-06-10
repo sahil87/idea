@@ -7,4 +7,4 @@ description: "Tag-driven release pipeline (release.sh + GitHub Actions + Homebre
 
 | File | Description | Last Updated |
 |------|-------------|-------------|
-| [pipeline](pipeline.md) | — | 2026-06-10 |
+| [pipeline](pipeline.md) | Tag-driven release pipeline: release.sh cuts the semver tag; GitHub Actions cross-compiles, publishes the GitHub Release, and updates the Homebrew tap; shll.ai pulls the help-dump JSON on its own schedule | 2026-06-10 |

@@ -1,3 +1,7 @@
+---
+description: "Pre-merge CI workflow (`ci.yml`): gofmt/vet/test on PRs and push-to-`main`, plus the `ci-gate` stable required status check"
+---
+
 # CI Pipeline
 
 `idea` runs pre-merge continuous integration via `.github/workflows/ci.yml`: every pull request and every push to `main` is gated on a gofmt/vet/test run. This is distinct from the tag-driven *release* pipeline (`../release/pipeline.md`) — CI validates changes **before** merge; release ships artifacts **after** a tag is pushed. The two never overlap (CI does not build binaries, touch tags, or update the Homebrew tap).
