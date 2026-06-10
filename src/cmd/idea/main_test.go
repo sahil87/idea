@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -164,5 +165,70 @@ func TestNoArgs_ShowsHelp(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "idea [text]") && !strings.Contains(string(out), "Backlog idea management") {
 		t.Errorf("expected help output, got: %s", out)
+	}
+}
+
+// writeRepoBacklog overwrites the repo's fab/backlog.md with the given content.
+func writeRepoBacklog(t *testing.T, repo, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(repo, "fab", "backlog.md"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// runSplit runs the binary capturing stdout and stderr separately.
+func runSplit(t *testing.T, bin, repo string, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
+	cmd.Dir = repo
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	err = cmd.Run()
+	return outBuf.String(), errBuf.String(), err
+}
+
+// TestDone_BackfillNoticeOnStderr verifies the advisory backfill notice goes to
+// stderr (with the correct count) while stdout carries only the confirmation.
+func TestDone_BackfillNoticeOnStderr(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+
+	// Two dateless ideas; marking one done forces a save that backfills BOTH
+	// (normalize-on-write), so the notice should report 2.
+	writeRepoBacklog(t, repo, "- [ ] [rk7t] dateless one\n- [ ] [c3d4] dateless two\n")
+
+	stdout, stderr, err := runSplit(t, bin, repo, "done", "rk7t")
+	if err != nil {
+		t.Fatalf("done failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "note: stamped today's date on 2 previously-dateless item(s)") {
+		t.Errorf("expected backfill notice on stderr, got stderr=%q", stderr)
+	}
+	if strings.Contains(stdout, "stamped today's date") {
+		t.Errorf("backfill notice leaked onto stdout: %q", stdout)
+	}
+	if !strings.HasPrefix(stdout, "Done: ") {
+		t.Errorf("expected confirmation on stdout, got %q", stdout)
+	}
+}
+
+// TestDone_NoBackfillNoticeWhenDated verifies the notice is suppressed when no
+// dateless items are stamped (count == 0).
+func TestDone_NoBackfillNoticeWhenDated(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+
+	writeRepoBacklog(t, repo, "- [ ] [rk7t] 2025-06-15: already dated\n")
+
+	stdout, stderr, err := runSplit(t, bin, repo, "done", "rk7t")
+	if err != nil {
+		t.Fatalf("done failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if strings.Contains(stderr, "stamped today's date") {
+		t.Errorf("expected no backfill notice on stderr, got %q", stderr)
+	}
+	if !strings.HasPrefix(stdout, "Done: ") {
+		t.Errorf("expected confirmation on stdout, got %q", stdout)
 	}
 }

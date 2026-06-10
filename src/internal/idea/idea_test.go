@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // --- Parsing Tests ---
@@ -64,7 +65,9 @@ func TestParseLine_Invalid(t *testing.T) {
 		{"short id", "- [ ] [a7k] 2025-06-15: Text"},
 		{"long id", "- [ ] [a7k2x] 2025-06-15: Text"},
 		{"uppercase id", "- [ ] [A7K2] 2025-06-15: Text"},
-		{"bad date format", "- [ ] [a7k2] 2025-6-15: Text"},
+		// Note: a malformed date (e.g. "2025-6-15:") is no longer "invalid" — with
+		// the optional-date relaxation it simply parses as a DATELESS idea whose
+		// text begins with the malformed-date string. See TestParseLine_Lenient.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -294,7 +297,7 @@ Some footer text
 
 	// Modify the idea
 	f.ideas[0].Text = "Add dark mode with toggle"
-	if err := SaveFile(f, path); err != nil {
+	if _, err := SaveFile(f, path); err != nil {
 		t.Fatalf("SaveFile: %v", err)
 	}
 
@@ -622,7 +625,7 @@ func TestDone_MarkOpen(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	i, err := Done(path, "a7k2")
+	i, _, err := Done(path, "a7k2")
 	if err != nil {
 		t.Fatalf("Done: %v", err)
 	}
@@ -643,7 +646,7 @@ func TestDone_AlreadyDone(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, err := Done(path, "a7k2")
+	_, _, err := Done(path, "a7k2")
 	if err == nil {
 		t.Fatal("expected error when marking already-done idea as done")
 	}
@@ -658,7 +661,7 @@ func TestReopen_MarkDone(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	i, err := Reopen(path, "a7k2")
+	i, _, err := Reopen(path, "a7k2")
 	if err != nil {
 		t.Fatalf("Reopen: %v", err)
 	}
@@ -678,7 +681,7 @@ func TestReopen_AlreadyOpen(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, err := Reopen(path, "a7k2")
+	_, _, err := Reopen(path, "a7k2")
 	if err == nil {
 		t.Fatal("expected error when reopening already-open idea")
 	}
@@ -693,7 +696,7 @@ func TestEdit_TextOnly(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	i, err := Edit(path, "a7k2", "Add dark mode with toggle", "", "")
+	i, _, err := Edit(path, "a7k2", "Add dark mode with toggle", "", "")
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -719,7 +722,7 @@ func TestEdit_WithID_NoCollision(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	i, err := Edit(path, "a7k2", "Same text", "z9y8", "")
+	i, _, err := Edit(path, "a7k2", "Same text", "z9y8", "")
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -735,7 +738,7 @@ func TestEdit_WithID_Collision(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, err := Edit(path, "a7k2", "Text", "z9y8", "")
+	_, _, err := Edit(path, "a7k2", "Text", "z9y8", "")
 	if err == nil {
 		t.Fatal("expected error for ID collision")
 	}
@@ -750,7 +753,7 @@ func TestEdit_WithDate(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	i, err := Edit(path, "a7k2", "Same text", "", "2025-12-01")
+	i, _, err := Edit(path, "a7k2", "Same text", "", "2025-12-01")
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -766,7 +769,7 @@ func TestRm_WithForce(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	removed, err := Rm(path, "a7k2", true)
+	removed, _, err := Rm(path, "a7k2", true)
 	if err != nil {
 		t.Fatalf("Rm: %v", err)
 	}
@@ -789,7 +792,7 @@ func TestRm_WithoutForce(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, err := Rm(path, "a7k2", false)
+	_, _, err := Rm(path, "a7k2", false)
 	if err == nil {
 		t.Fatal("expected error without --force")
 	}
@@ -809,7 +812,7 @@ Footer
 `
 	path := writeBacklog(t, dir, content)
 
-	_, err := Rm(path, "a7k2", true)
+	_, _, err := Rm(path, "a7k2", true)
 	if err != nil {
 		t.Fatalf("Rm: %v", err)
 	}
@@ -924,7 +927,7 @@ func TestDone_PreservesOtherIdeas(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, err := Done(path, "a7k2")
+	_, _, err := Done(path, "a7k2")
 	if err != nil {
 		t.Fatalf("Done: %v", err)
 	}
@@ -945,7 +948,7 @@ func TestEdit_PreservesStatus(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	i, err := Edit(path, "a7k2", "Updated done idea", "", "")
+	i, _, err := Edit(path, "a7k2", "Updated done idea", "", "")
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -988,7 +991,7 @@ func TestLoadFile_PreservesTrailingBlankLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
-	if err := SaveFile(f, path); err != nil {
+	if _, err := SaveFile(f, path); err != nil {
 		t.Fatalf("SaveFile: %v", err)
 	}
 
@@ -1004,7 +1007,7 @@ func TestEdit_EmptyTextRejected(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, err := Edit(path, "a7k2", "", "", "")
+	_, _, err := Edit(path, "a7k2", "", "", "")
 	if err == nil {
 		t.Fatal("expected error for empty text")
 	}
@@ -1040,5 +1043,353 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 	if len(ideas) != 0 {
 		t.Errorf("count = %d, want 0", len(ideas))
+	}
+}
+
+// --- Lenient Parser Tests (resilient backlog parser) ---
+
+// TestParseLine_Lenient covers the accepted input variants: optional date,
+// variant bullets (- * +), leading whitespace, and the canonical regression.
+func TestParseLine_Lenient(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		wantID   string
+		wantDate string
+		wantText string
+		wantDone bool
+	}{
+		{"canonical open (regression)", "- [ ] [a7k2] 2025-06-15: Add dark mode", "a7k2", "2025-06-15", "Add dark mode", false},
+		{"canonical done (regression)", "- [x] [e5f6] 2025-06-08: Fix bug", "e5f6", "2025-06-08", "Fix bug", true},
+		{"dateless open", "- [ ] [rk7t] Tune the reporter", "rk7t", "", "Tune the reporter", false},
+		{"dateless done", "- [x] [rk7t] Tune the reporter", "rk7t", "", "Tune the reporter", true},
+		{"star bullet", "* [ ] [a7k2] do a thing", "a7k2", "", "do a thing", false},
+		{"plus bullet", "+ [x] [a7k2] do a thing", "a7k2", "", "do a thing", true},
+		{"star bullet dated", "* [ ] [a7k2] 2025-06-15: dated star", "a7k2", "2025-06-15", "dated star", false},
+		{"leading spaces", "  - [ ] [a7k2] indented idea", "a7k2", "", "indented idea", false},
+		{"leading tab", "\t- [ ] [a7k2] tab indented", "a7k2", "", "tab indented", false},
+		{"leading spaces dated", "    - [x] [a7k2] 2025-06-15: deep indent dated", "a7k2", "2025-06-15", "deep indent dated", true},
+		{"malformed date is text", "- [ ] [a7k2] 2025-6-15: Text", "a7k2", "", "2025-6-15: Text", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idea, ok := ParseLine(tt.line)
+			if !ok {
+				t.Fatalf("ParseLine(%q) = ok=false, want true", tt.line)
+			}
+			if idea.ID != tt.wantID {
+				t.Errorf("ID = %q, want %q", idea.ID, tt.wantID)
+			}
+			if idea.Date != tt.wantDate {
+				t.Errorf("Date = %q, want %q", idea.Date, tt.wantDate)
+			}
+			if idea.Text != tt.wantText {
+				t.Errorf("Text = %q, want %q", idea.Text, tt.wantText)
+			}
+			if idea.Done != tt.wantDone {
+				t.Errorf("Done = %v, want %v", idea.Done, tt.wantDone)
+			}
+		})
+	}
+}
+
+// TestParseLine_DatelessAndDatedMatchModuloDate pins R1: a dateless line and its
+// dated counterpart parse to the same Idea except for Date.
+func TestParseLine_DatelessAndDatedMatchModuloDate(t *testing.T) {
+	dated, ok1 := ParseLine("- [ ] [rk7t] 2026-06-10: Tune the README-extraction reporter")
+	dateless, ok2 := ParseLine("- [ ] [rk7t] Tune the README-extraction reporter")
+	if !ok1 || !ok2 {
+		t.Fatalf("both lines should parse: dated=%v dateless=%v", ok1, ok2)
+	}
+	if dated.ID != dateless.ID || dated.Text != dateless.Text || dated.Done != dateless.Done {
+		t.Errorf("ideas differ beyond Date: dated=%+v dateless=%+v", dated, dateless)
+	}
+	if dated.Date != "2026-06-10" {
+		t.Errorf("dated.Date = %q, want 2026-06-10", dated.Date)
+	}
+	if dateless.Date != "" {
+		t.Errorf("dateless.Date = %q, want empty", dateless.Date)
+	}
+}
+
+// TestParseLine_PrecisionGuard pins R6 + R7: Shape B lines and genuine non-idea
+// prose are NOT parsed as ideas under the relaxed regex.
+func TestParseLine_PrecisionGuard(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+	}{
+		// Shape B (second bracket) — must stay inert pass-through (R6).
+		{"shape B dated", "- [ ] [ni3o] [DEV-1011] 2026-02-12: Capture more metrics"},
+		{"shape B dateless", "- [ ] [ni3o] [DEV-1011] Capture more metrics"},
+		{"shape B star bullet", "* [x] [ni3o] [DEV-1011] 2026-02-12: done one"},
+		// Genuine non-idea prose — missing the checkbox/id anchors (R7).
+		{"header", "# Backlog"},
+		{"prose", "Some footer text"},
+		{"plain bullet", "- a plain bullet"},
+		{"checkbox no id", "- [ ] no id here"},
+		{"id too long", "- [ ] [toolong5] text"},
+		{"id too short", "- [ ] [abc] text"},
+		{"uppercase id", "- [ ] [ABCD] text"},
+		{"blank", "   "},
+		{"empty", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, ok := ParseLine(tt.line); ok {
+				t.Errorf("ParseLine(%q) = ok=true, want false", tt.line)
+			}
+		})
+	}
+}
+
+// TestParseLine_DatedBracketPrefixedTextParses guards R6's precision: the Shape B
+// guard must apply only to DATELESS matches. A genuine canonical line whose
+// description happens to begin with a bracket (date present) must still parse,
+// not be dropped as pass-through.
+func TestParseLine_DatedBracketPrefixedTextParses(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		wantDate string
+		wantText string
+	}{
+		{"dated bracket text", "- [ ] [a7k2] 2025-06-15: [TODO] Add dark mode", "2025-06-15", "[TODO] Add dark mode"},
+		{"dated bracket text done", "- [x] [e5f6] 2025-06-08: [WIP] refactor parser", "2025-06-08", "[WIP] refactor parser"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idea, ok := ParseLine(tt.line)
+			if !ok {
+				t.Fatalf("ParseLine(%q) = ok=false, want true (dated bracket-prefixed text must parse)", tt.line)
+			}
+			if idea.Date != tt.wantDate {
+				t.Errorf("Date = %q, want %q", idea.Date, tt.wantDate)
+			}
+			if idea.Text != tt.wantText {
+				t.Errorf("Text = %q, want %q", idea.Text, tt.wantText)
+			}
+		})
+	}
+}
+
+// TestLoadFile_CRLF pins R4: CRLF lines parse, \r never leaks into Text, and
+// output is LF-only after a save.
+func TestLoadFile_CRLF(t *testing.T) {
+	dir := t.TempDir()
+	// CRLF endings throughout.
+	content := "# Backlog\r\n\r\n- [ ] [a7k2] 2025-06-15: Add dark mode\r\n- [x] [e5f6] 2025-06-08: Fix bug\r\n"
+	path := writeBacklog(t, dir, content)
+
+	f, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if len(f.ideas) != 2 {
+		t.Fatalf("ideas count = %d, want 2", len(f.ideas))
+	}
+	if f.ideas[0].Text != "Add dark mode" {
+		t.Errorf("first idea Text = %q, want 'Add dark mode' (no trailing \\r)", f.ideas[0].Text)
+	}
+	if strings.Contains(f.ideas[0].Text, "\r") || strings.Contains(f.ideas[1].Text, "\r") {
+		t.Error("carriage return leaked into idea Text")
+	}
+
+	// Save and assert output is LF-only.
+	if _, err := SaveFile(f, path); err != nil {
+		t.Fatalf("SaveFile: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if strings.Contains(string(data), "\r") {
+		t.Errorf("output still contains CRLF; want LF-only:\n%q", string(data))
+	}
+}
+
+// TestSaveFile_BackfillsDatelessDate pins R9 + R10's count: a dateless idea gets
+// today's date on save and SaveFile reports the backfill count.
+func TestSaveFile_BackfillsDatelessDate(t *testing.T) {
+	dir := t.TempDir()
+	content := "- [ ] [rk7t] Tune the reporter\n- [ ] [a7k2] 2025-06-15: Already dated\n- [ ] [c3d4] Another dateless\n"
+	path := writeBacklog(t, dir, content)
+
+	f, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	// Capture today before the code under test stamps the backfill date, so a
+	// midnight rollover between save and assertion cannot flake the test.
+	today := time.Now().Format("2006-01-02")
+	backfilled, err := SaveFile(f, path)
+	if err != nil {
+		t.Fatalf("SaveFile: %v", err)
+	}
+	if backfilled != 2 {
+		t.Errorf("backfilled = %d, want 2", backfilled)
+	}
+
+	data, _ := os.ReadFile(path)
+	got := string(data)
+	if !strings.Contains(got, "- [ ] [rk7t] "+today+": Tune the reporter") {
+		t.Errorf("rk7t should be stamped with today (%s):\n%s", today, got)
+	}
+	if !strings.Contains(got, "- [ ] [c3d4] "+today+": Another dateless") {
+		t.Errorf("c3d4 should be stamped with today (%s):\n%s", today, got)
+	}
+	// Already-dated idea keeps its date.
+	if !strings.Contains(got, "- [ ] [a7k2] 2025-06-15: Already dated") {
+		t.Errorf("a7k2 date should be unchanged:\n%s", got)
+	}
+}
+
+// TestSaveFile_NoBackfillReturnsZero pins R10's suppression branch: when no
+// dateless ideas exist, SaveFile reports a zero count.
+func TestSaveFile_NoBackfillReturnsZero(t *testing.T) {
+	dir := t.TempDir()
+	content := "- [ ] [a7k2] 2025-06-15: Already dated\n"
+	path := writeBacklog(t, dir, content)
+
+	f, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	backfilled, err := SaveFile(f, path)
+	if err != nil {
+		t.Fatalf("SaveFile: %v", err)
+	}
+	if backfilled != 0 {
+		t.Errorf("backfilled = %d, want 0", backfilled)
+	}
+}
+
+// TestDone_BackfillsAndCanonicalizes pins the worked example (R8 + R9 + R10):
+// a dateless line is stamped with today and canonicalized on `done`.
+func TestDone_BackfillsAndCanonicalizes(t *testing.T) {
+	dir := t.TempDir()
+	content := "- [ ] [rk7t] Tune the README-extraction reporter\n"
+	path := writeBacklog(t, dir, content)
+
+	// Capture today before Done backfills/saves, so a midnight rollover between
+	// the save and the assertions cannot flake the test.
+	today := time.Now().Format("2006-01-02")
+	i, backfilled, err := Done(path, "rk7t")
+	if err != nil {
+		t.Fatalf("Done: %v", err)
+	}
+	if backfilled != 1 {
+		t.Errorf("backfilled = %d, want 1", backfilled)
+	}
+	if i.Date != today {
+		t.Errorf("returned idea Date = %q, want today %q", i.Date, today)
+	}
+	data, _ := os.ReadFile(path)
+	want := "- [x] [rk7t] " + today + ": Tune the README-extraction reporter\n"
+	if string(data) != want {
+		t.Errorf("file after done:\ngot:  %q\nwant: %q", string(data), want)
+	}
+}
+
+// TestEdit_BackfillsDatelessDate pins R9 on the edit path.
+func TestEdit_BackfillsDatelessDate(t *testing.T) {
+	dir := t.TempDir()
+	content := "- [ ] [rk7t] original text\n"
+	path := writeBacklog(t, dir, content)
+
+	// Capture today before Edit backfills/saves, so a midnight rollover between
+	// the save and the assertion cannot flake the test.
+	today := time.Now().Format("2006-01-02")
+	i, backfilled, err := Edit(path, "rk7t", "new text", "", "")
+	if err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+	if backfilled != 1 {
+		t.Errorf("backfilled = %d, want 1", backfilled)
+	}
+	if i.Date != today {
+		t.Errorf("Date = %q, want today %q", i.Date, today)
+	}
+}
+
+// TestSaveFile_CanonicalizesVariants pins R8: variant bullets, indentation, and
+// CRLF among recognized idea lines are all canonicalized on the first mutating
+// save, while non-idea lines are preserved.
+func TestSaveFile_CanonicalizesVariants(t *testing.T) {
+	dir := t.TempDir()
+	// Mix of * and + bullets, indentation; CRLF on the star line.
+	content := "# Backlog\n\n* [ ] [a7k2] 2025-06-15: star bullet\r\n  + [x] [e5f6] 2025-06-08: indented plus\nSome prose\n"
+	path := writeBacklog(t, dir, content)
+
+	f, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if len(f.ideas) != 2 {
+		t.Fatalf("ideas count = %d, want 2", len(f.ideas))
+	}
+	if _, err := SaveFile(f, path); err != nil {
+		t.Fatalf("SaveFile: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	got := string(data)
+	// Recognized idea lines canonicalized to "- " bullet, no indent, LF.
+	if !strings.Contains(got, "- [ ] [a7k2] 2025-06-15: star bullet\n") {
+		t.Errorf("star bullet not canonicalized:\n%q", got)
+	}
+	if !strings.Contains(got, "- [x] [e5f6] 2025-06-08: indented plus\n") {
+		t.Errorf("indented plus bullet not canonicalized:\n%q", got)
+	}
+	if strings.Contains(got, "\r") {
+		t.Errorf("output should be LF-only:\n%q", got)
+	}
+	if strings.Contains(got, "* [") || strings.Contains(got, "+ [") || strings.Contains(got, "  - [") {
+		t.Errorf("variant bullets/indentation survived save:\n%q", got)
+	}
+	// Non-idea lines preserved.
+	if !strings.Contains(got, "# Backlog") || !strings.Contains(got, "Some prose") {
+		t.Errorf("non-idea lines not preserved:\n%q", got)
+	}
+}
+
+// TestSaveFile_ShapeBPreservedVerbatim pins R6: a Shape B second-bracket line is
+// neither parsed nor rewritten on a mutating save of a different idea.
+func TestSaveFile_ShapeBPreservedVerbatim(t *testing.T) {
+	dir := t.TempDir()
+	shapeB := "- [ ] [ni3o] [DEV-1011] 2026-02-12: Capture more metrics"
+	content := shapeB + "\n- [ ] [a7k2] 2025-06-15: Real idea\n"
+	path := writeBacklog(t, dir, content)
+
+	// Mutate a different (real) idea, forcing a save.
+	_, _, err := Done(path, "a7k2")
+	if err != nil {
+		t.Fatalf("Done: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	got := string(data)
+	if !strings.Contains(got, shapeB) {
+		t.Errorf("Shape B line not preserved verbatim:\nwant line: %q\ngot file:\n%q", shapeB, got)
+	}
+	if !strings.Contains(got, "- [x] [a7k2] 2025-06-15: Real idea") {
+		t.Errorf("real idea should be marked done:\n%q", got)
+	}
+}
+
+// TestSaveFile_PreservesNonIdeaLinesByteForByte pins R11: headers, prose, and
+// blank lines survive a mutating save byte-for-byte (only the mutated idea line
+// changes; the other idea lines are already canonical so the rest is identical).
+func TestSaveFile_PreservesNonIdeaLinesByteForByte(t *testing.T) {
+	dir := t.TempDir()
+	content := "# Backlog\n\nIntro prose paragraph.\n\n- [ ] [a7k2] 2025-06-15: First\n- [ ] [c3d4] 2025-06-10: Second\n\nFooter line\n"
+	path := writeBacklog(t, dir, content)
+
+	_, _, err := Done(path, "a7k2")
+	if err != nil {
+		t.Fatalf("Done: %v", err)
+	}
+
+	want := "# Backlog\n\nIntro prose paragraph.\n\n- [x] [a7k2] 2025-06-15: First\n- [ ] [c3d4] 2025-06-10: Second\n\nFooter line\n"
+	data, _ := os.ReadFile(path)
+	if string(data) != want {
+		t.Errorf("non-idea content not preserved byte-for-byte\ngot:  %q\nwant: %q", string(data), want)
 	}
 }

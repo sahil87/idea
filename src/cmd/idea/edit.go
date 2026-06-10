@@ -31,11 +31,12 @@ targets the main worktree's backlog and --file / IDEAS_FILE point elsewhere
 				return err
 			}
 
-			i, err := idea.Edit(path, args[0], args[1], newID, newDate)
+			i, backfilled, err := idea.Edit(path, args[0], args[1], newID, newDate)
 			if err != nil {
 				return err
 			}
 
+			printBackfillNotice(cmd, backfilled)
 			fmt.Printf("Updated: %s\n", idea.FormatLine(i))
 			return nil
 		},

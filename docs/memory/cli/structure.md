@@ -53,6 +53,49 @@ Two principles in `fab/project/constitution.md` constrain code placement inside 
 
 The split forces a testable seam — `internal/idea` is unit-tested directly (table-driven, real temp dirs, no mocks) without spawning subprocesses. `cmd/idea/main_test.go` covers the end-to-end CLI by building the binary under test.
 
+## Backlog line lifecycle (lenient read, canonical write)
+
+`internal/idea/idea.go` owns the parse/format/save contract for backlog lines. The governing principle is **lenient on read, canonical on write** (be liberal in what you accept, strict in what you emit). This shape was established by `260610-wtmn-resilient-backlog-parser`, which fixed silent-failure parsing of dateless backlogs (e.g. shll.ai's `- [ ] [id] text` form).
+
+### Parse (lenient)
+
+`ParseLine` matches against `lineRegex`:
+
+```go
+^\s*[-*+] \[([ x])\] \[([a-z0-9]{4})\] (?:(\d{4}-\d{2}-\d{2}): )?(.+)$
+```
+
+Accepted input variants (all parse to the same `Idea`, modulo `Date`):
+
+| Dimension | Accepted | Notes |
+|-----------|----------|-------|
+| Date segment | present **or** absent | dateless line yields `Date == ""` |
+| Bullet marker | `-`, `*`, `+` | |
+| Leading whitespace | any (spaces, tabs) | stripped on canonicalize |
+| Line endings | CRLF or LF | `LoadFile` strips a trailing `\r` from each split line before parsing |
+
+The `[ ]`/`[x]` checkbox plus the 4-char `[a-z0-9]{4}` id are the anchors that keep false-positive matching of genuine prose low. The date group is non-capturing, so the date is optional without a second regex.
+
+`ParseLine` is **pure**: it never stamps a date. A dateless line parses with `Date == ""`, so non-mutating reads (`list`, `show`) and `MarshalJSON` faithfully reflect on-disk content — a never-saved dateless idea shows `"date": ""`.
+
+**Shape B precision guard.** Legacy "Shape B" second-bracket lines (`- [ ] [id] [DEV-1011] date: text`) — and, by extension, any captured text beginning with a `[...]` bracket — stay **inert pass-through**. `ParseLine` rejects them via `shapeBPrefixRegex` (`^\[[^\]]*\]` against the captured text group), returning `ok=false` so they are preserved verbatim. The `[issue_ids]` slot is owned by external consumers (fab-kit's `/fab-new`); idea must neither parse nor rewrite these lines. Erring toward preservation is safer than rewriting an external tool's line.
+
+### Format / Save (canonical)
+
+`FormatLine` is the single source of output truth and is unchanged by the resilience work:
+
+```go
+return fmt.Sprintf("- [%s] [%s] %s: %s", i.StatusCheck(), i.ID, i.Date, i.Text)
+```
+
+Output is always canonical: `- ` bullet, no leading whitespace, date present, single-space delimiters, LF line endings (`SaveFile` joins on `\n` and ends the file with a single trailing LF). Because `SaveFile` regenerates **every** recognized idea line from `FormatLine`, the first mutating command (`done`/`reopen`/`edit`/`rm`) normalizes the whole file at once: variant bullets → `-`, indentation stripped, CRLF → LF, dateless → dated. This **normalize-on-write** is a deliberate, accepted trade-off — a single `idea done` can produce a large git diff on a file with many variant/dateless lines. Non-idea lines (headers, blank lines, prose) pass through unchanged (Constitution Principle I).
+
+**Date backfill on save.** `SaveFile` stamps `time.Now().Format("2006-01-02")` on any idea whose `Date == ""` *before* serializing, and returns `(count, error)` — the count of backfilled dates. Stamping at the save seam (not in `ParseLine`) keeps `ParseLine` pure and keeps `MarshalJSON` correct, since the in-memory `Idea` has a date by the time it is marshaled after a save. The write is atomic (temp file + rename) so a crash mid-write cannot leave the source-of-truth backlog partially written.
+
+**Backfill stderr notice (Constitution IV split).** The backfill count flows up to the command layer: the mutating internal ops `Done`, `Reopen`, `Edit`, `Rm` return `(Idea, int, error)`. When count > 0, the `cmd/idea` layer prints `note: stamped today's date on N previously-dateless item(s)` to **stderr** via the `printBackfillNotice` helper (`main.go`, using `cmd.ErrOrStderr()`); it is suppressed entirely at count 0. stdout stays the machine-parseable confirmation only (Constitution Principle VI). `internal/idea` writes nothing to stderr — output-channel policy lives in `cmd/` per Principle IV. This backfill notice is the first idea command output deliberately routed to stderr rather than stdout.
+
+The behavior contract is documented for external consumers in `../../specs/backlog-format.md` and `../../specs/overview.md`.
+
 ## Command help text (`Short` vs `Long`)
 
 Every subcommand sets an enriched cobra `Long` describing what it does, its key flags, the worktree-vs-`--main` resolution (for backlog-touching commands), and a short example. `Short` stays the terse one-liner used by the `Available Commands` sidebar and the `idea -h` root listing — it is a public, byte-stable string; depth goes in `Long` only. The convention was applied repo-wide by `260602-s73u-enrich-command-long-help` (the 8 backlog/update commands; `main.go` / `shell_init.go` already carried `Long`).

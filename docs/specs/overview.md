@@ -45,7 +45,15 @@ Each idea gets a short 4-character lowercase alphanumeric ID (e.g., `[a7k2]`) an
 
 Queries (the `<query>` argument on `show`, `done`, `reopen`, `edit`, `rm`) match against either the ID or the description text. Matching is substring, case-insensitive. If a query matches more than one idea, the command refuses to act and lists the matches.
 
-For the full backlog line format (the public contract that external consumers depend on), see [`backlog-format.md`](backlog-format.md).
+## Parse & Format Behavior (lenient read, canonical write)
+
+`idea` is **liberal in what it accepts and strict in what it emits**:
+
+- **Lenient on read.** The `YYYY-MM-DD:` date segment is **optional** on input, and `idea` also accepts `*`/`+` bullets (in addition to `-`), arbitrary leading whitespace, and CRLF or LF line endings. A line is recognized as an idea by its `[ ]`/`[x]` checkbox plus 4-char `[id]` anchors. This means a hand-edited or externally-authored backlog of dateless `- [ ] [id] text` lines is read correctly rather than silently ignored.
+- **Canonical on write.** Every idea line `idea` writes uses one canonical form — `- ` bullet, no indentation, LF endings, and a date that is **always present** (today's date is backfilled when the input had none). A mutating command (`done`/`reopen`/`edit`/`rm`) normalizes all recognized idea lines in the file at once; non-mutating commands (`list`/`show`) never rewrite the file.
+- **Backfill notice.** When a mutating save stamps today's date on one or more previously-dateless items, `idea` prints a brief advisory notice to **stderr** (`note: stamped today's date on N previously-dateless item(s)`), keeping stdout machine-parseable. The notice is suppressed when nothing was backfilled.
+
+For the full backlog line format — accepted input variants, the canonical output form, date backfill, Shape B pass-through, and the format-contract change note — see [`backlog-format.md`](backlog-format.md).
 
 ## External-Consumer Integration
 
