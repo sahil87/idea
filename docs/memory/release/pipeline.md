@@ -82,6 +82,7 @@ The release workflow declares `permissions: contents: write` for the in-repo Git
 
 ## Cross-references
 
+- Pre-merge CI (the other GitHub Actions workflow — `ci.yml` runs gofmt/vet/test on PRs and push-to-`main`, distinct from this tag-driven release pipeline): `../ci/pipeline.md`.
 - Source layout assumed by the build path (`./cmd/idea`) and version-stamp wiring (`-X main.version=...`): see `../cli/structure.md`.
 - The hidden `help-dump` subcommand that shll.ai pulls, and the frozen JSON contract it emits: `../cli/structure.md`.
 - shll.ai's README-extraction contract (the source of truth for how `README.md` + `docs/site/**` must be structured to render cleanly): <https://github.com/sahil87/shll.ai/blob/main/docs/specs/readme-extraction-contract.md>.

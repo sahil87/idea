@@ -313,10 +313,10 @@ Some footer text
 
 func TestResolveFilePath(t *testing.T) {
 	tests := []struct {
-		name     string
-		flag     string
-		env      string
-		wantSfx  string
+		name    string
+		flag    string
+		env     string
+		wantSfx string
 	}{
 		{"default", "", "", "fab/backlog.md"},
 		{"flag override", "custom/ideas.md", "", "custom/ideas.md"},
