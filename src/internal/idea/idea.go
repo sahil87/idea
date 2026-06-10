@@ -53,8 +53,27 @@ func (i Idea) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// lineRegex matches lines like: - [ ] [a7k2] 2025-06-15: Add dark mode
-var lineRegex = regexp.MustCompile(`^- \[([ x])\] \[([a-z0-9]{4})\] (\d{4}-\d{2}-\d{2}): (.+)$`)
+// lineRegex matches idea lines leniently (lenient on read, canonical on write).
+// Accepted input variants:
+//   - bullet marker: -, *, or +
+//   - arbitrary leading whitespace (spaces or tabs)
+//   - the "YYYY-MM-DD: " date segment is OPTIONAL
+//
+// Examples that all parse:
+//   - [ ] [a7k2] 2025-06-15: Add dark mode   (canonical)
+//   - [ ] [a7k2] Add dark mode               (dateless)
+//   - [x] [a7k2] indented + star bullet
+//
+// The [ ]/[x] checkbox plus the 4-char [id] are the anchors that keep
+// false-positive matching of genuine prose low. The date group is non-capturing
+// so the date itself remains optional without a second regex.
+var lineRegex = regexp.MustCompile(`^\s*[-*+] \[([ x])\] \[([a-z0-9]{4})\] (?:(\d{4}-\d{2}-\d{2}): )?(.+)$`)
+
+// shapeBPrefixRegex detects a legacy "Shape B" second bracket immediately
+// following the id, e.g. the text portion of `- [ ] [id] [DEV-1011] date: text`.
+// Such lines stay inert pass-through: the [issue_ids] slot is owned by external
+// consumers (fab-kit's /fab-new), so idea must neither parse nor rewrite them.
+var shapeBPrefixRegex = regexp.MustCompile(`^\[[^\]]*\]`)
 
 var idChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
@@ -82,14 +101,28 @@ func ValidateDate(date string) error {
 
 // ParseLine parses a single backlog line into an Idea.
 // Returns the parsed idea and true if the line is valid, or a zero Idea and false.
+//
+// ParseLine is pure: it never stamps a date. A dateless line parses with
+// Date == "". Date backfill happens at the save seam (SaveFile), which keeps
+// reads (list/show) and MarshalJSON faithful to the on-disk content.
 func ParseLine(line string) (Idea, bool) {
 	m := lineRegex.FindStringSubmatch(line)
 	if m == nil {
 		return Idea{}, false
 	}
+	// Precision guard: a legacy "Shape B" line (`- [ ] [id] [DEV-1011] date: text`)
+	// matches the relaxed regex with the second bracket captured into the text
+	// group. Reject it so it stays inert pass-through — the [issue_ids] slot is
+	// owned by external consumers, and idea must not parse or rewrite these lines.
+	// By design, ANY text beginning with a bracket (e.g. `[TODO] do thing`) is
+	// treated as pass-through too: we cannot distinguish it from an issue-id slot,
+	// and erring toward preservation is safer than rewriting an external tool's line.
+	if shapeBPrefixRegex.MatchString(m[4]) {
+		return Idea{}, false
+	}
 	return Idea{
 		ID:   m[2],
-		Date: m[3],
+		Date: m[3], // "" when the optional date segment is absent
 		Text: m[4],
 		Done: m[1] == "x",
 	}, true
@@ -160,6 +193,12 @@ func LoadFile(path string) (*File, error) {
 	rawLines := strings.Split(content, "\n")
 
 	for i, line := range rawLines {
+		// Strip a trailing carriage return so CRLF files parse identically to
+		// LF files. The \r is part of canonicalization — recognized idea lines
+		// are regenerated LF-only on save, and a non-idea line that merely had a
+		// CRLF ending is stored without its \r (output is always LF; non-idea
+		// *content* is otherwise preserved verbatim per Constitution I).
+		line = strings.TrimSuffix(line, "\r")
 		if idea, ok := ParseLine(line); ok {
 			f.lines = append(f.lines, "") // placeholder
 			f.ideaIndices = append(f.ideaIndices, i)
@@ -173,10 +212,29 @@ func LoadFile(path string) (*File, error) {
 }
 
 // SaveFile writes the backlog file, reconstructing from preserved lines and ideas.
+// It returns the number of dateless ideas whose date was backfilled to today
+// (callers surface this count as an advisory stderr notice; see cmd/idea).
+//
+// Canonical on write: every recognized idea line is regenerated via FormatLine
+// (- bullet, no indentation, date present, LF endings), so the first mutating
+// save normalizes all variant/dateless/CRLF idea lines at once. Non-idea lines
+// pass through unchanged. Any idea with an empty Date is stamped with today's
+// date (time.Now().Format("2006-01-02")) before serialization, keeping the
+// in-memory Idea — and therefore MarshalJSON — consistent with what is written.
+//
 // The write is atomic: content is written to a temp file in the same directory
 // and then renamed over the target path, so a crash mid-write cannot leave the
 // backlog (the source of truth) partially written or empty.
-func SaveFile(f *File, path string) error {
+func SaveFile(f *File, path string) (int, error) {
+	backfilled := 0
+	today := time.Now().Format("2006-01-02")
+	for i := range f.ideas {
+		if f.ideas[i].Date == "" {
+			f.ideas[i].Date = today
+			backfilled++
+		}
+	}
+
 	// Rebuild lines
 	result := make([]string, len(f.lines))
 	copy(result, f.lines)
@@ -186,7 +244,10 @@ func SaveFile(f *File, path string) error {
 	}
 
 	content := strings.Join(result, "\n") + "\n"
-	return atomicWriteFile(path, []byte(content), 0644)
+	if err := atomicWriteFile(path, []byte(content), 0644); err != nil {
+		return 0, err
+	}
+	return backfilled, nil
 }
 
 // atomicWriteFile writes data to path atomically by writing to a temp file
@@ -502,71 +563,76 @@ func Show(path, query string) (Idea, error) {
 	return idea, nil
 }
 
-// Done marks a single matching open idea as done.
-func Done(path, query string) (Idea, error) {
+// Done marks a single matching open idea as done. The returned count is the
+// number of previously-dateless ideas whose date was backfilled to today on save
+// (a side effect of normalize-on-write); the cmd layer surfaces it on stderr.
+func Done(path, query string) (Idea, int, error) {
 	f, err := LoadFile(path)
 	if err != nil {
-		return Idea{}, err
+		return Idea{}, 0, err
 	}
 
 	_, idx, err := RequireSingle(query, f.ideas, FilterOpen)
 	if err != nil {
-		return Idea{}, err
+		return Idea{}, 0, err
 	}
 
 	f.ideas[idx].Done = true
-	if err := SaveFile(f, path); err != nil {
-		return Idea{}, err
+	backfilled, err := SaveFile(f, path)
+	if err != nil {
+		return Idea{}, 0, err
 	}
-	return f.ideas[idx], nil
+	return f.ideas[idx], backfilled, nil
 }
 
-// Reopen marks a single matching done idea as open.
-func Reopen(path, query string) (Idea, error) {
+// Reopen marks a single matching done idea as open. See Done for the count.
+func Reopen(path, query string) (Idea, int, error) {
 	f, err := LoadFile(path)
 	if err != nil {
-		return Idea{}, err
+		return Idea{}, 0, err
 	}
 
 	_, idx, err := RequireSingle(query, f.ideas, FilterDone)
 	if err != nil {
-		return Idea{}, err
+		return Idea{}, 0, err
 	}
 
 	f.ideas[idx].Done = false
-	if err := SaveFile(f, path); err != nil {
-		return Idea{}, err
+	backfilled, err := SaveFile(f, path)
+	if err != nil {
+		return Idea{}, 0, err
 	}
-	return f.ideas[idx], nil
+	return f.ideas[idx], backfilled, nil
 }
 
 // Edit modifies a single matching idea's text, and optionally its ID and date.
-func Edit(path, query, newText, newID, newDate string) (Idea, error) {
+// See Done for the meaning of the returned count.
+func Edit(path, query, newText, newID, newDate string) (Idea, int, error) {
 	if newText == "" {
-		return Idea{}, fmt.Errorf("text is required")
+		return Idea{}, 0, fmt.Errorf("text is required")
 	}
 
 	f, err := LoadFile(path)
 	if err != nil {
-		return Idea{}, err
+		return Idea{}, 0, err
 	}
 
 	_, idx, err := RequireSingle(query, f.ideas, FilterAll)
 	if err != nil {
-		return Idea{}, err
+		return Idea{}, 0, err
 	}
 
 	// Validate new ID format if provided
 	if newID != "" {
 		if err := ValidateID(newID); err != nil {
-			return Idea{}, err
+			return Idea{}, 0, err
 		}
 	}
 
 	// Validate new date format if provided
 	if newDate != "" {
 		if err := ValidateDate(newDate); err != nil {
-			return Idea{}, err
+			return Idea{}, 0, err
 		}
 	}
 
@@ -574,7 +640,7 @@ func Edit(path, query, newText, newID, newDate string) (Idea, error) {
 	if newID != "" && newID != f.ideas[idx].ID {
 		for i, idea := range f.ideas {
 			if i != idx && idea.ID == newID {
-				return Idea{}, fmt.Errorf("ID '%s' already exists", newID)
+				return Idea{}, 0, fmt.Errorf("ID '%s' already exists", newID)
 			}
 		}
 		f.ideas[idx].ID = newID
@@ -586,26 +652,27 @@ func Edit(path, query, newText, newID, newDate string) (Idea, error) {
 
 	f.ideas[idx].Text = newText
 
-	if err := SaveFile(f, path); err != nil {
-		return Idea{}, err
+	backfilled, err := SaveFile(f, path)
+	if err != nil {
+		return Idea{}, 0, err
 	}
-	return f.ideas[idx], nil
+	return f.ideas[idx], backfilled, nil
 }
 
-// Rm removes a single matching idea from the file.
-func Rm(path, query string, force bool) (Idea, error) {
+// Rm removes a single matching idea from the file. See Done for the count.
+func Rm(path, query string, force bool) (Idea, int, error) {
 	if !force {
-		return Idea{}, fmt.Errorf("Use --force to confirm deletion")
+		return Idea{}, 0, fmt.Errorf("Use --force to confirm deletion")
 	}
 
 	f, err := LoadFile(path)
 	if err != nil {
-		return Idea{}, err
+		return Idea{}, 0, err
 	}
 
 	_, idx, err := RequireSingle(query, f.ideas, FilterAll)
 	if err != nil {
-		return Idea{}, err
+		return Idea{}, 0, err
 	}
 
 	removed := f.ideas[idx]
@@ -623,8 +690,9 @@ func Rm(path, query string, force bool) (Idea, error) {
 		f.ideaIndices[i]--
 	}
 
-	if err := SaveFile(f, path); err != nil {
-		return Idea{}, err
+	backfilled, err := SaveFile(f, path)
+	if err != nil {
+		return Idea{}, 0, err
 	}
-	return removed, nil
+	return removed, backfilled, nil
 }

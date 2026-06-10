@@ -28,11 +28,12 @@ elsewhere (see "idea --help").
 				return err
 			}
 
-			i, err := idea.Done(path, args[0])
+			i, backfilled, err := idea.Done(path, args[0])
 			if err != nil {
 				return err
 			}
 
+			printBackfillNotice(cmd, backfilled)
 			fmt.Printf("Done: %s\n", idea.FormatLine(i))
 			return nil
 		},

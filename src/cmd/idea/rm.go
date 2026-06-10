@@ -30,11 +30,12 @@ remove anything. --main targets the main worktree's backlog, and
 				return err
 			}
 
-			i, err := idea.Rm(path, args[0], force)
+			i, backfilled, err := idea.Rm(path, args[0], force)
 			if err != nil {
 				return err
 			}
 
+			printBackfillNotice(cmd, backfilled)
 			fmt.Printf("Removed: %s\n", idea.FormatLine(i))
 			return nil
 		},

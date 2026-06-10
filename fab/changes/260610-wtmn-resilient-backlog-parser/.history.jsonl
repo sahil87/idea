@@ -1,0 +1,16 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-10T09:26:58Z"}
+{"args":"Make the idea parser resilient to backlog format variants — lenient on read, canonical on write. Concrete failure: idea list in shll.ai shows zero items because dateless lines don't match the date-mandatory parser regex.","cmd":"fab-new","event":"command","ts":"2026-06-10T09:26:58Z"}
+{"delta":"+2.4","event":"confidence","score":2.4,"trigger":"calc-score","ts":"2026-06-10T09:28:10Z"}
+{"delta":"+0.0","event":"confidence","score":2.4,"trigger":"calc-score","ts":"2026-06-10T09:28:18Z"}
+{"cmd":"fab-clarify","event":"command","ts":"2026-06-10T09:29:03Z"}
+{"delta":"+0.0","event":"confidence","score":2.4,"trigger":"calc-score","ts":"2026-06-10T09:30:12Z"}
+{"delta":"+2.0","event":"confidence","score":4.4,"trigger":"calc-score","ts":"2026-06-10T09:30:20Z"}
+{"delta":"+0.0","event":"confidence","score":4.4,"trigger":"calc-score","ts":"2026-06-10T09:30:35Z"}
+{"delta":"+0.0","event":"confidence","score":4.4,"trigger":"calc-score","ts":"2026-06-10T09:30:40Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-06-10T09:31:08Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-06-10T09:31:08Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-06-10T09:41:52Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-06-10T09:52:48Z"}
+{"event":"review","result":"passed","ts":"2026-06-10T09:52:48Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-10T09:54:37Z"}
+{"cmd":"git-pr","event":"command","ts":"2026-06-10T09:56:16Z"}

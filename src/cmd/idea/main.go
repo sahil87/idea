@@ -67,6 +67,19 @@ Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 	return root
 }
 
+// printBackfillNotice writes an advisory notice to the command's stderr when a
+// mutating save stamped today's date on one or more previously-dateless ideas.
+// It is suppressed entirely when count is 0 so stdout — and a zero-backfill
+// stderr — stay clean and machine-parseable (Constitution VI). The notice goes
+// to stderr (not stdout) because it is advisory, not part of the command's
+// machine-readable result.
+func printBackfillNotice(cmd *cobra.Command, count int) {
+	if count <= 0 {
+		return
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "note: stamped today's date on %d previously-dateless item(s)\n", count)
+}
+
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
 		if !errors.Is(err, errSilent) {
