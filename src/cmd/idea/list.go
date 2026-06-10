@@ -14,8 +14,9 @@ func listCmd() *cobra.Command {
 	var sortField string
 
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List ideas from the backlog",
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List ideas from the backlog",
 		Long: `List ideas from the current worktree's backlog (fab/backlog.md).
 
 Open ideas are shown by default. Use --all/-a to include done ideas, or --done

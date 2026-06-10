@@ -1,3 +1,7 @@
+---
+description: "Self-update subcommand (`idea update`): Homebrew-backed upgrade flow, non-brew install fallback hint, and the `--skip-brew-update` flag"
+---
+
 # `idea update` Subcommand
 
 `idea update` is a self-update command that upgrades the running binary in place via Homebrew. The cobra wrapper lives at `src/cmd/idea/update.go`; the behavior lives at `src/internal/idea/update.go`. The split follows Constitution Principle IV — `cmd/idea/update.go` contains only the cobra factory plus error mapping, and the `internal/idea` package owns all subprocess invocation, version comparison, and Homebrew detection.

@@ -1,5 +1,5 @@
 ---
-description: CLI source structure (cmd/idea + internal/idea + version wiring), the backlog line lifecycle (lenient-read / canonical-write parse-format-save contract incl. the escaped-text convention for multiline ideas), and per-subcommand notes
+description: "Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas), help-dump contract, and version stamping"
 ---
 
 # CLI Source Structure
@@ -157,6 +157,21 @@ root.AddCommand(
 `main()` is then a four-line wrapper: `newRootCmd().Execute()` with the existing `errSilent` sentinel handling (`errors.Is(err, errSilent)` skips the `ERROR:` line) and `os.Exit(1)` on error.
 
 The factory exists so the live cobra tree can be constructed in two places off the same definition: `main()` for the running binary, and `help_dump.go`'s `buildNode(cmd.Root())`, which serializes that identical tree (see below). It is also the entry point every in-process test uses — `newRootCmd()` with `SetOut(&bytes.Buffer{})` + `SetArgs(...)` exercises the full CLI without building a binary or spawning a subprocess.
+
+## Command aliases and the bare-text shorthand
+
+`list` is the only subcommand with an alias: `Aliases: []string{"ls"}` in the `listCmd()` command literal (`cmd/idea/list.go`), added by `260610-04rt-add-ls-alias`. `idea ls` is identical to `idea list` in every respect — same flags (`--all/-a`, `--done`, `--json`, `--sort`, `--reverse`), same inherited persistent flags (`--file`, `--main`), same output. The alias is pure routing; the `list` command's behavior and JSON output are unchanged.
+
+**Routing rule (load-bearing).** Cobra resolves subcommand names **and aliases** before the root `RunE` bare-text fallback fires. Two consequences:
+
+1. Before the alias existed, `idea ls` did not error — it fell through to the bare-text shorthand and silently appended a junk idea with the text "ls". The alias fixed that footgun.
+2. Every alias permanently removes a word from the start of bare-text idea capture (`idea <text>` → `idea add <text>`). Adding an alias is therefore a **namespace decision, not a convenience decision** — any word claimed as an alias can never again begin an idea typed bare.
+
+**Rejected aliases** (surveyed and rejected in the 04rt intake discussion; future proposals must clear the same bar): `remove`/`delete` (rm), `upgrade` (update), `cat` (show) — each plausibly starts bare-text idea prose; `undo` (reopen) — implies revert-last-action semantics worth reserving. Scope decision: `ls` is the only alias.
+
+**Guard test.** `TestRouting_LsAliasAndBareShorthand` (`cmd/idea/main_test.go`) is a table-driven subprocess test asserting (a) `ls` / `ls --json` stdout is byte-identical to `list` / `list --json` on a seeded backlog with the backlog file unchanged, and (b) bare text with a non-alias first word (`idea lsx some text`) still routes to the add shorthand. It reuses the existing `buildBinary`/`setupGitRepo`/`writeRepoBacklog`/`runSplit` helpers plus a `readRepoBacklog` helper added by the same change.
+
+**help-dump interaction.** No `aliases` field was added to the help-dump JSON schema — the schema is a frozen cross-repo contract (Constitution VI), and an additive field is deferred until an external consumer needs it. The list node's `text` automatically gains cobra's rendered `Aliases: list, ls` line, since `text` reproduces what `-h` prints (see the next section).
 
 ## Hidden `help-dump` subcommand
 

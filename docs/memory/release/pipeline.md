@@ -1,3 +1,7 @@
+---
+description: "Tag-driven release pipeline: release.sh cuts the semver tag; GitHub Actions cross-compiles, publishes the GitHub Release, and updates the Homebrew tap; shll.ai pulls the help-dump JSON on its own schedule"
+---
+
 # Release Pipeline
 
 `idea` is released independently via a tag-driven pipeline: a local script cuts and pushes a semver tag, GitHub Actions takes over from the tag push to cross-compile, publish a GitHub Release, and update the Homebrew tap formula.

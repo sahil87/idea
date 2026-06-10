@@ -7,5 +7,5 @@ description: "CLI source structure (cmd/idea + internal/idea + version wiring), 
 
 | File | Description | Last Updated |
 |------|-------------|-------------|
-| [structure](structure.md) | CLI source structure (cmd/idea + internal/idea + version wiring), the backlog line lifecycle (lenient-read / canonical-write parse-format-save contract incl. the escaped-text convention for multiline ideas), and per-subcommand notes | 2026-06-10 |
-| [update](update.md) | — | 2026-05-31 |
+| [structure](structure.md) | Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas), help-dump contract, and version stamping | 2026-06-10 |
+| [update](update.md) | Self-update subcommand (`idea update`): Homebrew-backed upgrade flow, non-brew install fallback hint, and the `--skip-brew-update` flag | 2026-05-31 |

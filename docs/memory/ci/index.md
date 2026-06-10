@@ -7,4 +7,4 @@ description: "Pre-merge CI workflow (`ci.yml`): gofmt/vet/test on PRs and push-t
 
 | File | Description | Last Updated |
 |------|-------------|-------------|
-| [pipeline](pipeline.md) | — | 2026-06-10 |
+| [pipeline](pipeline.md) | Pre-merge CI workflow (`ci.yml`): gofmt/vet/test on PRs and push-to-`main`, plus the `ci-gate` stable required status check | 2026-06-10 |
