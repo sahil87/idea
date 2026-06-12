@@ -177,16 +177,11 @@ func writeRepoBacklog(t *testing.T, repo, content string) {
 	}
 }
 
-// runSplit runs the binary capturing stdout and stderr separately.
+// runSplit runs the binary capturing stdout and stderr separately. The nil
+// environment inherits the process environment.
 func runSplit(t *testing.T, bin, repo string, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
-	cmd.Dir = repo
-	var outBuf, errBuf bytes.Buffer
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-	err = cmd.Run()
-	return outBuf.String(), errBuf.String(), err
+	return runSplitEnv(t, bin, repo, nil, args...)
 }
 
 // readRepoBacklog returns the current contents of the repo's fab/backlog.md.
@@ -462,6 +457,238 @@ func TestPrune_CLIOutputContract(t *testing.T) {
 			}
 			if got := readRepoBacklog(t, repo); got != want {
 				t.Errorf("backlog:\ngot:\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+// writeEditorScript writes an executable shell script (a fake $EDITOR or
+// $VISUAL) into a temp dir and returns its path. The body runs under sh with
+// the editor buffer path as $1.
+func writeEditorScript(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-editor.sh")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// editorEnv returns the inherited environment with any host VISUAL/EDITOR
+// scrubbed (so the developer's or CI's editor cannot shadow the per-case
+// fakes — resolution order is under test), plus the given overrides.
+func editorEnv(overrides ...string) []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "VISUAL=") || strings.HasPrefix(kv, "EDITOR=") {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, overrides...)
+}
+
+// runSplitEnv is runSplit with an explicit environment.
+func runSplitEnv(t *testing.T, bin, repo string, env []string, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
+	cmd.Dir = repo
+	cmd.Env = env
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	err = cmd.Run()
+	return outBuf.String(), errBuf.String(), err
+}
+
+// TestEdit_EditorForm covers the one-arg editor-based form of `idea edit`
+// end to end with fake $EDITOR/$VISUAL shell scripts, plus the two-arg
+// tripwire regression. The side file (exposed to scripts as $SIDE) doubles
+// as the editor-invocation tripwire and the captured-buffer recorder.
+func TestEdit_EditorForm(t *testing.T) {
+	bin := buildBinary(t)
+
+	const seed = "# Backlog\n\n- [ ] [ab12] 2026-06-10: hello\n"
+
+	tests := []struct {
+		name        string
+		backlog     string // initial backlog; defaults to seed when ""
+		editor      string // $EDITOR fake script body ("" = EDITOR unset)
+		visual      string // $VISUAL fake script body ("" = VISUAL unset)
+		args        []string
+		wantErr     bool
+		wantStdout  string   // exact stdout
+		wantStderr  []string // required stderr substrings
+		noStderr    []string // forbidden stderr substrings
+		wantBacklog string   // expected final backlog; "" = byte-identical to initial
+		wantSide    string   // required side-file content (checked when non-empty)
+		sideAbsent  bool     // assert the side file was never created (tripwire)
+	}{
+		{
+			name:        "editor rewrite persists canonically",
+			editor:      `printf 'rewritten by editor\n' > "$1"`,
+			args:        []string{"edit", "ab12"},
+			wantStdout:  "Updated: - [ ] [ab12] 2026-06-10: rewritten by editor\n",
+			wantBacklog: "# Backlog\n\n- [ ] [ab12] 2026-06-10: rewritten by editor\n",
+		},
+		{
+			name:        "multiline round-trip: decoded buffer in, re-escaped line out",
+			backlog:     "# Backlog\n\n- [ ] [ab12] 2026-06-10: a\\nb\n",
+			editor:      `cat "$1" > "$SIDE"; printf 'x\ny\n' > "$1"`,
+			args:        []string{"edit", "ab12"},
+			wantStdout:  "Updated: - [ ] [ab12] 2026-06-10: x\\ny\n",
+			wantBacklog: "# Backlog\n\n- [ ] [ab12] 2026-06-10: x\\ny\n",
+			wantSide:    "a\nb", // the editor saw DECODED text: real newline, no escapes
+		},
+		{
+			name:       "trailing LF appended by editor does not change the idea",
+			editor:     `printf '\n' >> "$1"`,
+			args:       []string{"edit", "ab12"},
+			wantStdout: "",
+			wantStderr: []string{"note: text unchanged — nothing to do"},
+		},
+		{
+			name:       "editor non-zero exit aborts without changes",
+			editor:     `printf 'discarded edit\n' > "$1"; exit 3`,
+			args:       []string{"edit", "ab12"},
+			wantErr:    true,
+			wantStdout: "",
+			wantStderr: []string{"ERROR:", "idea unchanged"},
+		},
+		{
+			name:       "unchanged buffer is a no-op with no normalize side effect",
+			backlog:    "# Backlog\n\n- [ ] [ab12] 2026-06-10: hello\n* [ ] [zz99] dateless passenger\n",
+			editor:     `exit 0`,
+			args:       []string{"edit", "ab12"},
+			wantStdout: "",
+			wantStderr: []string{"note: text unchanged — nothing to do"},
+		},
+		{
+			// The stored text itself ends in an LF (escaped `\n` on disk).
+			// An untouched session must be a byte-identical no-op: the
+			// pre-strip buffer equals the text even though the strip-one
+			// rule would eat the trailing LF.
+			name:       "untouched LF-terminated text is a byte-identical no-op",
+			backlog:    "# Backlog\n\n- [ ] [ab12] 2026-06-10: hello\\n\n",
+			editor:     `exit 0`,
+			args:       []string{"edit", "ab12"},
+			wantStdout: "",
+			wantStderr: []string{"note: text unchanged — nothing to do"},
+		},
+		{
+			// Metadata-only save on unchanged LF-terminated text: the date
+			// changes but the text (including its trailing LF) is preserved
+			// verbatim — the forced save must not apply the strip-one rule.
+			name:        "--date on unchanged LF-terminated text preserves the text verbatim",
+			backlog:     "# Backlog\n\n- [ ] [ab12] 2026-06-10: hello\\n\n",
+			editor:      `exit 0`,
+			args:        []string{"edit", "ab12", "--date", "2026-01-01"},
+			wantStdout:  "Updated: - [ ] [ab12] 2026-01-01: hello\\n\n",
+			noStderr:    []string{"unchanged"},
+			wantBacklog: "# Backlog\n\n- [ ] [ab12] 2026-01-01: hello\\n\n",
+		},
+		{
+			name:       "emptied buffer is refused",
+			editor:     `: > "$1"`,
+			args:       []string{"edit", "ab12"},
+			wantErr:    true,
+			wantStdout: "",
+			wantStderr: []string{"ERROR:", "empty"},
+		},
+		{
+			name:        "VISUAL wins over EDITOR",
+			editor:      `touch "$SIDE"`, // tripwire: must not run
+			visual:      `printf 'via visual\n' > "$1"`,
+			args:        []string{"edit", "ab12"},
+			wantStdout:  "Updated: - [ ] [ab12] 2026-06-10: via visual\n",
+			wantBacklog: "# Backlog\n\n- [ ] [ab12] 2026-06-10: via visual\n",
+			sideAbsent:  true,
+		},
+		{
+			name:        "two-arg form never launches the editor",
+			editor:      `touch "$SIDE"`, // tripwire: must not run
+			args:        []string{"edit", "ab12", "inline replacement"},
+			wantStdout:  "Updated: - [ ] [ab12] 2026-06-10: inline replacement\n",
+			wantBacklog: "# Backlog\n\n- [ ] [ab12] 2026-06-10: inline replacement\n",
+			sideAbsent:  true,
+		},
+		{
+			name:        "--date with unchanged text suppresses the no-op",
+			editor:      `exit 0`,
+			args:        []string{"edit", "ab12", "--date", "2026-01-01"},
+			wantStdout:  "Updated: - [ ] [ab12] 2026-01-01: hello\n",
+			noStderr:    []string{"unchanged"},
+			wantBacklog: "# Backlog\n\n- [ ] [ab12] 2026-01-01: hello\n",
+		},
+		{
+			name:       "ambiguous query refused before editor launch",
+			backlog:    "# Backlog\n\n- [ ] [ab12] 2026-06-10: hello one\n- [ ] [cd34] 2026-06-10: hello two\n",
+			editor:     `touch "$SIDE"`, // tripwire: must not run
+			args:       []string{"edit", "hello"},
+			wantErr:    true,
+			wantStdout: "",
+			wantStderr: []string{"Multiple matches"},
+			sideAbsent: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			initial := tt.backlog
+			if initial == "" {
+				initial = seed
+			}
+			writeRepoBacklog(t, repo, initial)
+
+			side := filepath.Join(t.TempDir(), "side")
+			env := editorEnv("SIDE=" + side)
+			if tt.editor != "" {
+				env = append(env, "EDITOR="+writeEditorScript(t, tt.editor))
+			}
+			if tt.visual != "" {
+				env = append(env, "VISUAL="+writeEditorScript(t, tt.visual))
+			}
+
+			stdout, stderr, err := runSplitEnv(t, bin, repo, env, tt.args...)
+			if tt.wantErr != (err != nil) {
+				t.Fatalf("err = %v, wantErr = %v\nstdout=%q stderr=%q", err, tt.wantErr, stdout, stderr)
+			}
+			if stdout != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			for _, want := range tt.wantStderr {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("stderr = %q, want substring %q", stderr, want)
+				}
+			}
+			for _, banned := range tt.noStderr {
+				if strings.Contains(stderr, banned) {
+					t.Errorf("stderr = %q, must not contain %q", stderr, banned)
+				}
+			}
+
+			wantBacklog := tt.wantBacklog
+			if wantBacklog == "" {
+				wantBacklog = initial
+			}
+			if got := readRepoBacklog(t, repo); got != wantBacklog {
+				t.Errorf("backlog:\ngot:  %q\nwant: %q", got, wantBacklog)
+			}
+
+			if tt.sideAbsent {
+				if _, statErr := os.Stat(side); !os.IsNotExist(statErr) {
+					t.Errorf("editor tripwire fired: side file exists (stat err = %v)", statErr)
+				}
+			}
+			if tt.wantSide != "" {
+				b, readErr := os.ReadFile(side)
+				if readErr != nil {
+					t.Fatalf("read side file: %v", readErr)
+				}
+				if string(b) != tt.wantSide {
+					t.Errorf("editor buffer = %q, want %q", string(b), tt.wantSide)
+				}
 			}
 		})
 	}
