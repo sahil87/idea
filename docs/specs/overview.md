@@ -36,9 +36,12 @@ The backlog file path can also be overridden globally by `--file <path>` (relati
 | `idea show <query>` | Show a single idea matching the query |
 | `idea done <query>` | Mark an idea as done |
 | `idea reopen <query>` | Reopen a completed idea |
-| `idea edit <query> "text"` | Modify an idea's text |
+| `idea edit <query>` | Edit an idea's text in your editor (`$VISUAL`, then `$EDITOR`, then `vi`) on the decoded text |
+| `idea edit <query> "text"` | Replace an idea's text inline |
 | `idea rm <query> --force` | Delete an idea (requires `--force` to confirm) |
 | `idea prune [--force]` | Bulk-remove all done ideas (dry run by default; `--force` to delete) |
+
+**Editor form contract** (`idea edit <query>`, no text argument): an unchanged buffer is a no-op — the backlog is untouched, a `note: text unchanged — nothing to do` advisory goes to stderr, and the exit code is 0. An emptied buffer is refused: no change, non-zero exit. A non-zero editor exit aborts: the backlog is untouched, non-zero exit. Passing `--id`/`--date` with the no-text form still opens the editor, applies the metadata at save, and suppresses the unchanged no-op — a metadata-only change lands without mutating the text.
 
 ## ID Format & Query Semantics
 

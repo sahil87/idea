@@ -19,9 +19,11 @@ src/
       help_dump.go             # hidden "help-dump" subcommand (CLI tree → JSON)
       main_test.go shell_init_test.go help_dump_test.go
   internal/
-    idea/                      # package logic (parsing, formatting, ID gen, file I/O, worktree resolution, self-update)
+    idea/                      # package logic (parsing, formatting, ID gen, file I/O, worktree resolution, self-update, $EDITOR round-trip)
       idea.go
       idea_test.go
+      editor.go
+      editor_test.go
       prune_test.go
       update.go
       update_test.go
@@ -136,7 +138,7 @@ Output is always canonical: `- ` bullet, no leading whitespace, date present, si
 
 **Date backfill on save.** `SaveFile` stamps `time.Now().Format("2006-01-02")` on any idea whose `Date == ""` *before* serializing, and returns `(count, error)` — the count of backfilled dates. Stamping at the save seam (not in `ParseLine`) keeps `ParseLine` pure and keeps `MarshalJSON` correct, since the in-memory `Idea` has a date by the time it is marshaled after a save. The write is atomic (temp file + rename) so a crash mid-write cannot leave the source-of-truth backlog partially written.
 
-**Backfill stderr notice (Constitution IV split).** The backfill count flows up to the command layer: the mutating internal ops `Done`, `Reopen`, `Edit`, `Rm` return `(Idea, int, error)`. When count > 0, the `cmd/idea` layer prints `note: stamped today's date on N previously-dateless item(s)` to **stderr** via the `printBackfillNotice` helper (`main.go`, using `cmd.ErrOrStderr()`); it is suppressed entirely at count 0. stdout stays the machine-parseable confirmation only (Constitution Principle VI). `internal/idea` writes nothing to stderr — output-channel policy lives in `cmd/` per Principle IV. This backfill notice was the first idea command output deliberately routed to stderr rather than stdout; `prune`'s dry-run confirm hint (`Re-run with --force to confirm.`) is the second, following the same advisory-vs-machine-readable split (see `prune.md`).
+**Backfill stderr notice (Constitution IV split).** The backfill count flows up to the command layer: the mutating internal ops `Done`, `Reopen`, `Edit`, `Rm` return `(Idea, int, error)`. When count > 0, the `cmd/idea` layer prints `note: stamped today's date on N previously-dateless item(s)` to **stderr** via the `printBackfillNotice` helper (`main.go`, using `cmd.ErrOrStderr()`); it is suppressed entirely at count 0. stdout stays the machine-parseable confirmation only (Constitution Principle VI). `internal/idea` writes nothing to stderr — output-channel policy lives in `cmd/` per Principle IV. The backfill notice was the first idea command output deliberately routed to stderr; `prune`'s dry-run confirm hint (`Re-run with --force to confirm.` — see `prune.md`) and `idea edit`'s editor-form no-op note (`note: text unchanged — nothing to do` — see `edit.md`) followed, making advisory-notes-to-stderr the established channel policy rather than a one-off.
 
 The behavior contract is documented for external consumers in `../../specs/backlog-format.md` and `../../specs/overview.md`.
 
@@ -218,4 +220,5 @@ This wiring is required because `idea` is released independently:
 - Release pipeline that consumes this layout (build path, version stamping, Homebrew formula); shll.ai pulls the command reference via `idea help-dump` (the release no longer publishes it): `../release/pipeline.md`.
 - Self-update subcommand built on top of the Homebrew tap (`update.go` / `internal/idea/update.go`): `update.md`.
 - Bulk-remove subcommand (`prune.go` / `idea.Prune`): dry-run/`--force` contract, output channels, and the deliberate non-archival design: `prune.md`.
+- `edit` subcommand two-form contract and the `$VISUAL`/`$EDITOR`/`vi` temp-file round trip (`edit.go` / `internal/idea/editor.go`): `edit.md`.
 - Constitution principles III and IV: `fab/project/constitution.md`.
