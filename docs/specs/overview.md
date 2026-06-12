@@ -40,6 +40,7 @@ The backlog file path can also be overridden globally by `--file <path>` (relati
 | `idea edit <query> "text"` | Replace an idea's text inline |
 | `idea rm <query> --force` | Delete an idea (requires `--force` to confirm) |
 | `idea prune [--force]` | Bulk-remove all done ideas (dry run by default; `--force` to delete) |
+| `idea fmt` | Rewrite the backlog into canonical form, adopting bare checkbox lines (`--check` reports without writing) |
 
 **Editor form contract** (`idea edit <query>`, no text argument): an unchanged buffer is a no-op — the backlog is untouched, a `note: text unchanged — nothing to do` advisory goes to stderr, and the exit code is 0. An emptied buffer is refused: no change, non-zero exit. A non-zero editor exit aborts: the backlog is untouched, non-zero exit. Passing `--id`/`--date` with the no-text form still opens the editor, applies the metadata at save, and suppresses the unchanged no-op — a metadata-only change lands without mutating the text.
 
@@ -54,8 +55,9 @@ Queries (the `<query>` argument on `show`, `done`, `reopen`, `edit`, `rm`) match
 `idea` is **liberal in what it accepts and strict in what it emits**:
 
 - **Lenient on read.** The `YYYY-MM-DD:` date segment is **optional** on input, and `idea` also accepts `*`/`+` bullets (in addition to `-`), arbitrary leading whitespace, and CRLF or LF line endings. A line is recognized as an idea by its `[ ]`/`[x]` checkbox plus 4-char `[id]` anchors. This means a hand-edited or externally-authored backlog of dateless `- [ ] [id] text` lines is read correctly rather than silently ignored.
-- **Canonical on write.** Every idea line `idea` writes uses one canonical form — `- ` bullet, no indentation, LF endings, and a date that is **always present** (today's date is backfilled when the input had none). A mutating command (`done`/`reopen`/`edit`/`rm`) normalizes all recognized idea lines in the file at once; non-mutating commands (`list`/`show`) never rewrite the file.
+- **Canonical on write.** Every idea line `idea` writes uses one canonical form — `- ` bullet, no indentation, LF endings, and a date that is **always present** (today's date is backfilled when the input had none). A mutating command (`done`/`reopen`/`edit`/`rm`, or `prune --force` when it removes items) normalizes all recognized idea lines in the file at once; non-mutating commands (`list`/`show`) never rewrite the file.
 - **Backfill notice.** When a mutating save stamps today's date on one or more previously-dateless items, `idea` prints a brief advisory notice to **stderr** (`note: stamped today's date on N previously-dateless item(s)`), keeping stdout machine-parseable. The notice is suppressed when nothing was backfilled.
+- **Explicit canonicalizer.** `idea fmt` rewrites the whole file into canonical form on demand — no semantic change required — and additionally **adopts** bare checkbox lines lacking the `[id]` anchor (fresh unique ID, today's date, checked state preserved), turning an existing markdown task list into a managed backlog in one command. It is idempotent (a second run is byte-stable and skips the write), reports to stderr while stdout stays empty, and `idea fmt --check` writes nothing, prints the would-be report, and exits non-zero when the file is not canonical.
 
 For the full backlog line format — accepted input variants, the canonical output form, date backfill, Shape B pass-through, and the format-contract change note — see [`backlog-format.md`](backlog-format.md).
 

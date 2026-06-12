@@ -97,6 +97,7 @@ func TestHelpDump_RealSubcommandsPresent(t *testing.T) {
 		{"edit", "idea edit"},
 		{"rm", "idea rm"},
 		{"prune", "idea prune"},
+		{"fmt", "idea fmt"},
 		{"update", "idea update"},
 		{"shell-init", "idea shell-init"},
 	}
