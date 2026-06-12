@@ -26,3 +26,6 @@
 {"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-12T05:47:49Z"}
 {"cmd":"git-pr","event":"command","ts":"2026-06-12T05:48:33Z"}
 {"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review-pr","ts":"2026-06-12T05:50:01Z"}
+{"cmd":"git-pr-review","event":"command","ts":"2026-06-12T05:51:27Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-06-12T06:10:14Z"}
+{"event":"review","result":"passed","ts":"2026-06-12T06:14:24Z"}
