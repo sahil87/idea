@@ -15,13 +15,14 @@ src/
   cmd/
     idea/                      # cobra entry point; one file per subcommand
       main.go                  # newRootCmd() factory + main()
-      add.go list.go show.go done.go reopen.go edit.go rm.go resolve.go update.go shell_init.go
+      add.go list.go show.go done.go reopen.go edit.go rm.go prune.go resolve.go update.go shell_init.go
       help_dump.go             # hidden "help-dump" subcommand (CLI tree → JSON)
       main_test.go shell_init_test.go help_dump_test.go
   internal/
     idea/                      # package logic (parsing, formatting, ID gen, file I/O, worktree resolution, self-update)
       idea.go
       idea_test.go
+      prune_test.go
       update.go
       update_test.go
 ```
@@ -109,6 +110,8 @@ The helpers are exported from `internal/idea` and built on package-level `string
 | `idea show` (plain) | `DisplayLine` — real newlines; continuation lines render below the `- [x] [id] date: ` prefix line |
 | `list --json` / `show --json` | real newlines in the `text` field (unchanged `MarshalJSON`) |
 | confirmations — `Added:` (via `idea.EscapeText` in `cmd/idea/add.go`); `Updated:`/`Done:`/`Removed:`/`Reopened:` (via `FormatLine`) | escaped single line — stdout stays machine-parseable (Constitution VI) |
+| `idea prune` (dry run) | escaped one line per removable done idea via `FormatLine` on stdout (pipe-friendly, e.g. `idea prune \| wc -l`); the confirm hint `Re-run with --force to confirm.` goes to **stderr** |
+| `idea prune --force` confirmation | `Pruned N done idea(s).` — count only, no per-line listing (per-line is reserved for the dry run; see `prune.md`) |
 
 **Legacy backslash policy (pre-convention files).** Lines written before the escape convention may contain literal backslashes:
 
@@ -133,7 +136,7 @@ Output is always canonical: `- ` bullet, no leading whitespace, date present, si
 
 **Date backfill on save.** `SaveFile` stamps `time.Now().Format("2006-01-02")` on any idea whose `Date == ""` *before* serializing, and returns `(count, error)` — the count of backfilled dates. Stamping at the save seam (not in `ParseLine`) keeps `ParseLine` pure and keeps `MarshalJSON` correct, since the in-memory `Idea` has a date by the time it is marshaled after a save. The write is atomic (temp file + rename) so a crash mid-write cannot leave the source-of-truth backlog partially written.
 
-**Backfill stderr notice (Constitution IV split).** The backfill count flows up to the command layer: the mutating internal ops `Done`, `Reopen`, `Edit`, `Rm` return `(Idea, int, error)`. When count > 0, the `cmd/idea` layer prints `note: stamped today's date on N previously-dateless item(s)` to **stderr** via the `printBackfillNotice` helper (`main.go`, using `cmd.ErrOrStderr()`); it is suppressed entirely at count 0. stdout stays the machine-parseable confirmation only (Constitution Principle VI). `internal/idea` writes nothing to stderr — output-channel policy lives in `cmd/` per Principle IV. This backfill notice is the first idea command output deliberately routed to stderr rather than stdout.
+**Backfill stderr notice (Constitution IV split).** The backfill count flows up to the command layer: the mutating internal ops `Done`, `Reopen`, `Edit`, `Rm` return `(Idea, int, error)`. When count > 0, the `cmd/idea` layer prints `note: stamped today's date on N previously-dateless item(s)` to **stderr** via the `printBackfillNotice` helper (`main.go`, using `cmd.ErrOrStderr()`); it is suppressed entirely at count 0. stdout stays the machine-parseable confirmation only (Constitution Principle VI). `internal/idea` writes nothing to stderr — output-channel policy lives in `cmd/` per Principle IV. This backfill notice was the first idea command output deliberately routed to stderr rather than stdout; `prune`'s dry-run confirm hint (`Re-run with --force to confirm.`) is the second, following the same advisory-vs-machine-readable split (see `prune.md`).
 
 The behavior contract is documented for external consumers in `../../specs/backlog-format.md` and `../../specs/overview.md`.
 
@@ -150,7 +153,7 @@ This is the single source for the shll.ai command-reference: the `help-dump` sub
 ```go
 root.AddCommand(
     addCmd(), listCmd(), showCmd(), doneCmd(), reopenCmd(),
-    editCmd(), rmCmd(), updateCmd(), newShellInitCmd(), helpDumpCmd(),
+    editCmd(), rmCmd(), pruneCmd(), updateCmd(), newShellInitCmd(), helpDumpCmd(),
 )
 ```
 
@@ -165,7 +168,7 @@ The factory exists so the live cobra tree can be constructed in two places off t
 **Routing rule (load-bearing).** Cobra resolves subcommand names **and aliases** before the root `RunE` bare-text fallback fires. Two consequences:
 
 1. Before the alias existed, `idea ls` did not error — it fell through to the bare-text shorthand and silently appended a junk idea with the text "ls". The alias fixed that footgun.
-2. Every alias permanently removes a word from the start of bare-text idea capture (`idea <text>` → `idea add <text>`). Adding an alias is therefore a **namespace decision, not a convenience decision** — any word claimed as an alias can never again begin an idea typed bare.
+2. Every alias permanently removes a word from the start of bare-text idea capture (`idea <text>` → `idea add <text>`). Adding an alias is therefore a **namespace decision, not a convenience decision** — any word claimed as an alias can never again begin an idea typed bare. The same holds for **subcommand names** themselves: the `prune` verb (added by `260612-drc1-add-prune-subcommand`) claims `prune` from the bare-text namespace — `idea prune the old cache` now routes to the subcommand (and errors under its `cobra.NoArgs`) instead of capturing an idea beginning with "prune".
 
 **Rejected aliases** (surveyed and rejected in the 04rt intake discussion; future proposals must clear the same bar): `remove`/`delete` (rm), `upgrade` (update), `cat` (show) — each plausibly starts bare-text idea prose; `undo` (reopen) — implies revert-last-action semantics worth reserving. Scope decision: `ls` is the only alias.
 
@@ -214,4 +217,5 @@ This wiring is required because `idea` is released independently:
 
 - Release pipeline that consumes this layout (build path, version stamping, Homebrew formula); shll.ai pulls the command reference via `idea help-dump` (the release no longer publishes it): `../release/pipeline.md`.
 - Self-update subcommand built on top of the Homebrew tap (`update.go` / `internal/idea/update.go`): `update.md`.
+- Bulk-remove subcommand (`prune.go` / `idea.Prune`): dry-run/`--force` contract, output channels, and the deliberate non-archival design: `prune.md`.
 - Constitution principles III and IV: `fab/project/constitution.md`.

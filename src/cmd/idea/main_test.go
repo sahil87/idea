@@ -390,6 +390,83 @@ func TestList_MultilineStaysEscapedSingleLine(t *testing.T) {
 	}
 }
 
+// TestPrune_CLIOutputContract verifies the prune wiring end to end: the bare
+// dry run lists the removable lines on stdout with the confirm hint on stderr
+// and writes nothing; --force rewrites the file and prints a count only; the
+// empty case prints the no-op message and leaves the file untouched in both
+// modes. exit 0 on every path is implied by err == nil from runSplit.
+func TestPrune_CLIOutputContract(t *testing.T) {
+	bin := buildBinary(t)
+
+	mixed := "# Backlog\n\n- [ ] [op3n] 2026-06-01: keep me\n- [x] [d0ne] 2026-06-02: prune me\n- [x] [d1ne] 2026-06-03: prune me too\n"
+	allOpen := "- [ ] [op3n] 2026-06-01: keep me\n"
+
+	tests := []struct {
+		name        string
+		backlog     string
+		args        []string
+		wantStdout  string
+		wantStderr  string
+		wantBacklog string // "" means unchanged
+	}{
+		{
+			name:       "dry run lists done ideas on stdout and hints on stderr",
+			backlog:    mixed,
+			args:       []string{"prune"},
+			wantStdout: "- [x] [d0ne] 2026-06-02: prune me\n- [x] [d1ne] 2026-06-03: prune me too\n",
+			wantStderr: "Re-run with --force to confirm.\n",
+		},
+		{
+			name:        "force prints count only and removes the done lines",
+			backlog:     mixed,
+			args:        []string{"prune", "--force"},
+			wantStdout:  "Pruned 2 done idea(s).\n",
+			wantStderr:  "",
+			wantBacklog: "# Backlog\n\n- [ ] [op3n] 2026-06-01: keep me\n",
+		},
+		{
+			name:       "no done ideas dry run",
+			backlog:    allOpen,
+			args:       []string{"prune"},
+			wantStdout: "No done ideas to prune.\n",
+			wantStderr: "",
+		},
+		{
+			name:       "no done ideas force",
+			backlog:    allOpen,
+			args:       []string{"prune", "--force"},
+			wantStdout: "No done ideas to prune.\n",
+			wantStderr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			writeRepoBacklog(t, repo, tt.backlog)
+
+			stdout, stderr, err := runSplit(t, bin, repo, tt.args...)
+			if err != nil {
+				t.Fatalf("%v failed: %v\nstdout=%q stderr=%q", tt.args, err, stdout, stderr)
+			}
+			if stdout != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			if stderr != tt.wantStderr {
+				t.Errorf("stderr = %q, want %q", stderr, tt.wantStderr)
+			}
+
+			want := tt.wantBacklog
+			if want == "" {
+				want = tt.backlog
+			}
+			if got := readRepoBacklog(t, repo); got != want {
+				t.Errorf("backlog:\ngot:\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
 // TestEdit_MultilineSingleLineConfirmation verifies the Updated: confirmation
 // (via FormatLine) stays a single escaped line for multiline replacement text.
 func TestEdit_MultilineSingleLineConfirmation(t *testing.T) {
