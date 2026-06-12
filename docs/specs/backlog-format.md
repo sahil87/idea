@@ -70,7 +70,7 @@ A dateless line and its dated counterpart parse to the same `Idea` modulo the `D
 
 ## Date Backfill on Write
 
-`idea` does not preserve datelessness. When a recognized idea has no date and the file is saved by a mutating command (`done`, `reopen`, `edit`, `rm`) or by `idea fmt`, `idea` backfills **today's date** before writing, so every persisted idea line carries a date.
+`idea` does not preserve datelessness. When a recognized idea has no date and the file is saved by a mutating command (`done`, `reopen`, `edit`, `rm`, or `prune --force` when it removes items) or by `idea fmt`, `idea` backfills **today's date** before writing, so every persisted idea line carries a date.
 
 Worked example (`idea done rk7t` on a dateless line, run on 2026-06-10):
 
@@ -89,7 +89,7 @@ The notice is suppressed entirely when no dates were backfilled.
 
 ## Normalize-on-Write
 
-`idea` rebuilds **every** recognized idea line from the canonical form on save — not just the line you edited. So the first mutating command (`done`/`edit`/`reopen`/`rm`) canonicalizes the whole file at once:
+`idea` rebuilds **every** recognized idea line from the canonical form on save — not just the line you edited. So the first mutating command (`done`/`edit`/`reopen`/`rm`, or `prune --force` when it removes items) canonicalizes the whole file at once:
 
 - variant bullets (`*`, `+`) → `-`
 - leading indentation → stripped
