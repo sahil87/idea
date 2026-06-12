@@ -21,7 +21,8 @@ lone backslashes doubled. Bare checkbox lines without a 4-char [id] anchor
 (e.g. "- [ ] buy milk", also */+ bullets and [x]/[X]) are adopted as managed
 ideas: each gets a fresh unique ID and today's date, with its checked state
 preserved. Lines whose text starts with a bracket (e.g. "- [ ] [DEV-1011] ...")
-and all other non-idea content are preserved byte-for-byte. A second run is
+and all other non-idea content keep their text verbatim; line endings
+canonicalize file-wide (CRLF becomes LF, single trailing LF). A second run is
 byte-stable, and an already-canonical file is not rewritten at all.
 
 stdout stays empty; the report (one "adopted:" line per adopted idea plus

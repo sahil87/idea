@@ -300,20 +300,22 @@ func parseContent(content string) *File {
 // and then renamed over the target path, so a crash mid-write cannot leave the
 // backlog (the source of truth) partially written or empty.
 func SaveFile(f *File, path string) (int, error) {
-	content, backfilled := render(f)
+	content, backfilled := render(f, time.Now().Format("2006-01-02"))
 	if err := atomicWriteFile(path, []byte(content), 0644); err != nil {
 		return 0, err
 	}
 	return backfilled, nil
 }
 
-// render stamps today's date on dateless ideas (returning the backfill count)
-// and rebuilds the canonical file content without writing it. It is the single
-// serialization point: SaveFile writes its output, and Fmt compares it against
-// the on-disk bytes to decide whether a write (or a --check failure) is needed.
-func render(f *File) (string, int) {
+// render stamps the given date on dateless ideas (returning the backfill count)
+// and rebuilds the canonical file content without writing it. The caller
+// supplies today so one logical operation stamps a single consistent date —
+// Fmt's counting pass, its adoption dates, and the rendered bytes must not
+// disagree across a midnight boundary. It is the single serialization point:
+// SaveFile writes its output, and Fmt compares it against the on-disk bytes to
+// decide whether a write (or a --check failure) is needed.
+func render(f *File, today string) (string, int) {
 	backfilled := 0
-	today := time.Now().Format("2006-01-02")
 	for i := range f.ideas {
 		if f.ideas[i].Date == "" {
 			f.ideas[i].Date = today

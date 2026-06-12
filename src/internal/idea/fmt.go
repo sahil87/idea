@@ -76,7 +76,7 @@ func Fmt(path string, check bool) (FmtResult, error) {
 		return res, err
 	}
 
-	content, _ := render(f)
+	content, _ := render(f, today)
 	res.Changed = content != string(data)
 	if check || !res.Changed {
 		return res, nil
