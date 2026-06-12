@@ -750,23 +750,61 @@ func Rm(path, query string, force bool) (Idea, int, error) {
 	}
 
 	removed := f.ideas[idx]
-
-	// Remove the idea line from lines and update indices
-	lineIdx := f.ideaIndices[idx]
-	f.lines = append(f.lines[:lineIdx], f.lines[lineIdx+1:]...)
-
-	// Remove from ideas and ideaIndices
-	f.ideas = append(f.ideas[:idx], f.ideas[idx+1:]...)
-	f.ideaIndices = append(f.ideaIndices[:idx], f.ideaIndices[idx+1:]...)
-
-	// Adjust line indices for ideas that come after the removed line
-	for i := idx; i < len(f.ideaIndices); i++ {
-		f.ideaIndices[i]--
-	}
+	removeIdeaAt(f, idx)
 
 	backfilled, err := SaveFile(f, path)
 	if err != nil {
 		return Idea{}, 0, err
+	}
+	return removed, backfilled, nil
+}
+
+// removeIdeaAt removes the idea at index idx from the file's bookkeeping —
+// its physical line, its ideas entry, and its ideaIndices entry — then shifts
+// the line indices of every idea after the removed line. This is the single
+// home of the File index invariant shared by Rm and Prune.
+func removeIdeaAt(f *File, idx int) {
+	lineIdx := f.ideaIndices[idx]
+	f.lines = append(f.lines[:lineIdx], f.lines[lineIdx+1:]...)
+
+	f.ideas = append(f.ideas[:idx], f.ideas[idx+1:]...)
+	f.ideaIndices = append(f.ideaIndices[:idx], f.ideaIndices[idx+1:]...)
+
+	for i := idx; i < len(f.ideaIndices); i++ {
+		f.ideaIndices[i]--
+	}
+}
+
+// Prune removes every done idea from the file in one pass. When force is
+// false it is a dry run: the would-be-removed done ideas are returned (in
+// file order) and the file is never written, so the count is always 0. Zero
+// done items is not an error — both modes return an empty slice, and force
+// skips the save entirely so a no-op invocation cannot trigger whole-file
+// normalization/backfill as a surprise side effect. See Done for the meaning
+// of the returned count.
+func Prune(path string, force bool) ([]Idea, int, error) {
+	f, err := LoadFile(path)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	removed := FindAll("", f.ideas, FilterDone)
+
+	if !force || len(removed) == 0 {
+		return removed, 0, nil
+	}
+
+	// Walk backwards so pending removals never shift the indices still to
+	// be visited.
+	for idx := len(f.ideas) - 1; idx >= 0; idx-- {
+		if f.ideas[idx].Done {
+			removeIdeaAt(f, idx)
+		}
+	}
+
+	backfilled, err := SaveFile(f, path)
+	if err != nil {
+		return nil, 0, err
 	}
 	return removed, backfilled, nil
 }
