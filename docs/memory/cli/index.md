@@ -7,6 +7,6 @@ description: "CLI source structure (cmd/idea + internal/idea + version wiring), 
 
 | File | Description | Last Updated |
 |------|-------------|-------------|
-| [prune](prune.md) | Bulk-remove subcommand (`idea prune`): dry-run-by-default/`--force` contract, stdout/stderr channel split, exit codes, the deliberate non-archival design, and the `removeIdeaAt` seam shared with `Rm` | — |
-| [structure](structure.md) | Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas), help-dump contract, and version stamping | 2026-06-10 |
+| [prune](prune.md) | Bulk-remove subcommand (`idea prune`): dry-run-by-default/`--force` contract, stdout/stderr channel split, exit codes, the deliberate non-archival design, and the `removeIdeaAt` seam shared with `Rm` | 2026-06-12 |
+| [structure](structure.md) | Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas), help-dump contract, and version stamping | 2026-06-12 |
 | [update](update.md) | Self-update subcommand (`idea update`): Homebrew-backed upgrade flow, non-brew install fallback hint, and the `--skip-brew-update` flag | 2026-06-10 |

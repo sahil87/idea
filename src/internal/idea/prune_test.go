@@ -89,10 +89,12 @@ func TestPrune(t *testing.T) {
 			dir := t.TempDir()
 			path := writeBacklog(t, dir, tt.content)
 
-			// Capture today before the code under test stamps the backfill
-			// date, so a midnight rollover cannot flake the test.
-			today := time.Now().Format("2006-01-02")
+			// Capture today on both sides of the call: the backfill stamp
+			// happens inside Prune, so on a midnight rollover either date is
+			// legitimate and the assertion accepts both.
+			before := time.Now().Format("2006-01-02")
 			pruned, backfilled, err := Prune(path, tt.force)
+			after := time.Now().Format("2006-01-02")
 			if err != nil {
 				t.Fatalf("Prune: %v", err)
 			}
@@ -113,9 +115,10 @@ func TestPrune(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := strings.ReplaceAll(tt.wantFile, "{TODAY}", today)
-			if string(data) != want {
-				t.Errorf("file content:\ngot:\n%s\nwant:\n%s", data, want)
+			wantBefore := strings.ReplaceAll(tt.wantFile, "{TODAY}", before)
+			wantAfter := strings.ReplaceAll(tt.wantFile, "{TODAY}", after)
+			if got := string(data); got != wantBefore && got != wantAfter {
+				t.Errorf("file content:\ngot:\n%s\nwant:\n%s", got, wantBefore)
 			}
 		})
 	}
