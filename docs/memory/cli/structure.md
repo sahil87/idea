@@ -1,5 +1,5 @@
 ---
-description: "Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas), help-dump contract, and version stamping"
+description: "Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), help-dump contract, and version stamping"
 ---
 
 # CLI Source Structure
@@ -15,15 +15,17 @@ src/
   cmd/
     idea/                      # cobra entry point; one file per subcommand
       main.go                  # newRootCmd() factory + main()
-      add.go list.go show.go done.go reopen.go edit.go rm.go prune.go resolve.go update.go shell_init.go
+      add.go list.go show.go done.go reopen.go edit.go rm.go prune.go fmt.go resolve.go update.go shell_init.go
       help_dump.go             # hidden "help-dump" subcommand (CLI tree → JSON)
-      main_test.go shell_init_test.go help_dump_test.go
+      main_test.go fmt_test.go shell_init_test.go help_dump_test.go
   internal/
     idea/                      # package logic (parsing, formatting, ID gen, file I/O, worktree resolution, self-update, $EDITOR round-trip)
       idea.go
       idea_test.go
       editor.go
       editor_test.go
+      fmt.go                   # idea fmt: Fmt/FmtResult + bare-checkbox adoption
+      fmt_test.go
       prune_test.go
       update.go
       update_test.go
@@ -134,13 +136,37 @@ func formatLineWith(i Idea, text string) string {
 - `FormatLine(i)` = `formatLineWith(i, EscapeText(i.Text))` — the **persisted/escaped** form; the single source of on-disk output truth. Every write path inherits the one-physical-line guarantee through it: `Add`'s append, `SaveFile`'s rebuild, the confirmations, and `RequireSingle`'s multi-match error listing.
 - `DisplayLine(i)` = `formatLineWith(i, i.Text)` — the **real-text** form for human-facing display (plain `idea show`).
 
-Output is always canonical: `- ` bullet, no leading whitespace, date present, single-space delimiters, escaped text, LF line endings (`SaveFile` joins on `\n` and ends the file with a single trailing LF). Because `SaveFile` regenerates **every** recognized idea line from `FormatLine`, the first mutating command (`done`/`reopen`/`edit`/`rm`) normalizes the whole file at once: variant bullets → `-`, indentation stripped, CRLF → LF, dateless → dated, legacy lone backslashes → doubled (`\\`). This **normalize-on-write** is a deliberate, accepted trade-off — a single `idea done` can produce a large git diff on a file with many variant/dateless lines. Non-idea lines (headers, blank lines, prose) pass through unchanged (Constitution Principle I).
+Output is always canonical: `- ` bullet, no leading whitespace, date present, single-space delimiters, escaped text, LF line endings (`SaveFile` joins on `\n` and ends the file with a single trailing LF). Because `SaveFile` regenerates **every** recognized idea line from `FormatLine`, the first mutating command (`done`/`reopen`/`edit`/`rm`) normalizes the whole file at once: variant bullets → `-`, indentation stripped, CRLF → LF, dateless → dated, legacy lone backslashes → doubled (`\\`). This **normalize-on-write** is a deliberate, accepted trade-off — a single `idea done` can produce a large git diff on a file with many variant/dateless lines. To land that churn as its own commit — with no semantic change riding along — use the explicit canonicalizer `idea fmt` (see below). Non-idea lines (headers, blank lines, prose) pass through unchanged (Constitution Principle I).
 
-**Date backfill on save.** `SaveFile` stamps `time.Now().Format("2006-01-02")` on any idea whose `Date == ""` *before* serializing, and returns `(count, error)` — the count of backfilled dates. Stamping at the save seam (not in `ParseLine`) keeps `ParseLine` pure and keeps `MarshalJSON` correct, since the in-memory `Idea` has a date by the time it is marshaled after a save. The write is atomic (temp file + rename) so a crash mid-write cannot leave the source-of-truth backlog partially written.
+**Date backfill on save.** The stamping lives in `render(f *File) (string, int)` — the date-stamp + rebuild step extracted from `SaveFile` by `260612-4m3a-add-fmt-canonicalizer-adoption` so `Fmt` can build the canonical content without writing it. `render` stamps `time.Now().Format("2006-01-02")` on any idea whose `Date == ""` *before* serializing and returns the backfill count; `SaveFile` is now `render` + atomic write, still returning `(count, error)`. Stamping at the save seam (not in `ParseLine`) keeps `ParseLine` pure and keeps `MarshalJSON` correct, since the in-memory `Idea` has a date by the time it is marshaled after a save. The write is atomic (temp file + rename) so a crash mid-write cannot leave the source-of-truth backlog partially written.
 
-**Backfill stderr notice (Constitution IV split).** The backfill count flows up to the command layer: the mutating internal ops `Done`, `Reopen`, `Edit`, `Rm` return `(Idea, int, error)`. When count > 0, the `cmd/idea` layer prints `note: stamped today's date on N previously-dateless item(s)` to **stderr** via the `printBackfillNotice` helper (`main.go`, using `cmd.ErrOrStderr()`); it is suppressed entirely at count 0. stdout stays the machine-parseable confirmation only (Constitution Principle VI). `internal/idea` writes nothing to stderr — output-channel policy lives in `cmd/` per Principle IV. The backfill notice was the first idea command output deliberately routed to stderr; `prune`'s dry-run confirm hint (`Re-run with --force to confirm.` — see `prune.md`) and `idea edit`'s editor-form no-op note (`note: text unchanged — nothing to do` — see `edit.md`) followed, making advisory-notes-to-stderr the established channel policy rather than a one-off.
+**Backfill stderr notice (Constitution IV split).** The backfill count flows up to the command layer: the mutating internal ops `Done`, `Reopen`, `Edit`, `Rm` return `(Idea, int, error)`. When count > 0, the `cmd/idea` layer prints `note: stamped today's date on N previously-dateless item(s)` to **stderr** via the `printBackfillNotice` helper (`main.go`, using `cmd.ErrOrStderr()`); it is suppressed entirely at count 0. stdout stays the machine-parseable confirmation only (Constitution Principle VI). `internal/idea` writes nothing to stderr — output-channel policy lives in `cmd/` per Principle IV. The backfill notice was the first idea command output deliberately routed to stderr; `prune`'s dry-run confirm hint (`Re-run with --force to confirm.` — see `prune.md`), `idea edit`'s editor-form no-op note (`note: text unchanged — nothing to do` — see `edit.md`), and `idea fmt`'s entire report (adoption lines + summary counts — see below) followed, making advisory-notes-to-stderr the established channel policy rather than a one-off.
 
 The behavior contract is documented for external consumers in `../../specs/backlog-format.md` and `../../specs/overview.md`.
+
+### Explicit canonicalizer & adoption (`idea fmt`)
+
+`idea fmt` (added by `260612-4m3a-add-fmt-canonicalizer-adoption`) is the explicit, gofmt-style trigger for the canonical write above: it rewrites the whole backlog into canonical form with no semantic change required, so the normalize-on-write churn can land as its own commit. `fmt` is the **only explicit whole-file write verb** — mutating CRUD commands keep their incidental normalize-on-write; `list`/`show` stay non-mutating.
+
+**Internal seams (no second serialization path).** `internal/idea/fmt.go` exports `Fmt(path string, check bool) (FmtResult, error)` with `FmtResult{Adopted []Idea, Normalized, Backfilled int, Changed bool}`. To let `Fmt` reuse the single parse walk and single serialization point, the same change split `LoadFile` into a thin wrapper over `parseContent(content string) *File` and `SaveFile` into atomic-write over `render(f *File) (string, int)` (date-stamp + rebuild, no write). `File.lines` now retains each idea line's raw (post-`\r`-strip) text instead of the former `""` placeholder — required for per-line `Normalized` counting (canonical `FormatLine` output vs. raw line) and invisible to every other caller, since `render`'s rebuild overwrites idea slots from `FormatLine`. Public `LoadFile`/`SaveFile` behavior is unchanged.
+
+**Automatic adoption of bare checkboxes.** `fmt` additionally brings plain markdown task-list lines under management — the only path that does. A line is an adoption candidate iff `ParseLine` rejects it AND it matches `adoptRegex` (`internal/idea/fmt.go`):
+
+```go
+^\s*[-*+] \[([ xX])\] (.+)$
+```
+
+with two guards evaluated on the **whitespace-trimmed** captured text — trimmed first so extra spaces between the checkbox and a bracket cannot defeat the guard (`- [ ]  [DEV-1011] x` stays inert; tightened by this change's post-review rework): blank text is not adopted, and bracket-led text (`shapeBPrefixRegex` — Shape B remnants, `[DEV-1011]`, `[TODO]`, non-4-char `[ab1]`) is not adopted, erring toward preservation. Each adopted line gets a fresh 4-char ID unique against both the file's parsed IDs and IDs assigned earlier in the same pass (`generateUniqueIDInSet`, an in-memory-set variant mirroring `generateUniqueID`'s retry skeleton — dedup of the two deferred), date = today (counted as *Adopted*, never as *Backfilled* — backfill counts only pre-existing managed dateless lines), checked state preserved (`[x]`/`[X]` adopt as done, canonical `[x]`), and the trimmed text stored as real text (escaped via `FormatLine` on write like every idea). Adopted indented/nested checkboxes flatten to top level — canonical form has no indentation.
+
+**Whole-file verdict.** `FmtResult.Changed` compares the rebuilt content against the original on-disk bytes; it drives both the write (skipped entirely when byte-identical — an idempotent second run touches nothing, not even mtime; a 0-byte file is left untouched, no trailing LF invented) and the `--check` exit code. Accepted edge: a CRLF-only or EOF-newline-only difference rewrites the file / fails `--check` while the per-line counts may read zero — `Changed` is authoritative, the counts are approximate.
+
+**cmd layer & output contract** (`cmd/idea/fmt.go`): `fmtCmd()` with a local `--check` flag and `Args: cobra.NoArgs`. stdout stays empty on every path — success is silence + exit 0, the `gofmt -w` precedent (Constitution VI). stderr composition, in order: one `adopted: [id] {escaped text}` line per adopted idea (file order, via `EscapeText`), then `printBackfillNotice` verbatim, then `fmt: N line(s) normalized, M line(s) adopted` printed only when the file changes (or would change). Zero-activity runs print nothing; `internal/idea` writes nothing to stderr (Constitution IV split). `--check` writes nothing, prints the same report, and exits 1 via the `errSilent` sentinel when non-canonical (0 when clean) — one flag serving both the dry-run preview and the scripts/CI gate. Accepted edge: the `--check` report shows freshly generated would-be IDs that are never persisted — a later real run assigns different ones.
+
+**Namespace claim.** Cobra resolves the `fmt` subcommand name before the root bare-text fallback, so `idea fmt some text` errors instead of adding an idea — the same namespace trade as the `ls` alias decision; "fmt" was judged to plausibly never begin bare idea prose.
+
+**Governance note (Constitution I).** Adoption narrows the round-trip preservation guarantee: bare checkbox lines lacking the `[id]` anchor were previously guaranteed non-idea pass-through, and `fmt` (and only `fmt`) now claims them. The carve-out is documented in `../../specs/backlog-format.md` (Round-Trip Preservation carve-out + format-contract change note) but the constitution text itself is unamended — judged defensible at review because `fmt` is an explicit migration verb the user invokes, not round-trip parsing; a future constitution amendment could codify the carve-out explicitly.
+
+**Uniqueness blind spot (consistent, accepted).** Adopted-ID uniqueness checks parsed ideas only — a 4-char bracket inside an unparseable line is invisible to it, exactly as it is to `Add`'s `checkIDCollision`.
 
 ## Command help text (`Short` vs `Long`)
 
@@ -155,7 +181,7 @@ This is the single source for the shll.ai command-reference: the `help-dump` sub
 ```go
 root.AddCommand(
     addCmd(), listCmd(), showCmd(), doneCmd(), reopenCmd(),
-    editCmd(), rmCmd(), pruneCmd(), updateCmd(), newShellInitCmd(), helpDumpCmd(),
+    editCmd(), rmCmd(), pruneCmd(), fmtCmd(), updateCmd(), newShellInitCmd(), helpDumpCmd(),
 )
 ```
 
@@ -170,7 +196,7 @@ The factory exists so the live cobra tree can be constructed in two places off t
 **Routing rule (load-bearing).** Cobra resolves subcommand names **and aliases** before the root `RunE` bare-text fallback fires. Two consequences:
 
 1. Before the alias existed, `idea ls` did not error — it fell through to the bare-text shorthand and silently appended a junk idea with the text "ls". The alias fixed that footgun.
-2. Every alias permanently removes a word from the start of bare-text idea capture (`idea <text>` → `idea add <text>`). Adding an alias is therefore a **namespace decision, not a convenience decision** — any word claimed as an alias can never again begin an idea typed bare. The same holds for **subcommand names** themselves: the `prune` verb (added by `260612-drc1-add-prune-subcommand`) claims `prune` from the bare-text namespace — `idea prune the old cache` now routes to the subcommand (and errors under its `cobra.NoArgs`) instead of capturing an idea beginning with "prune".
+2. Every alias permanently removes a word from the start of bare-text idea capture (`idea <text>` → `idea add <text>`). Adding an alias is therefore a **namespace decision, not a convenience decision** — any word claimed as an alias can never again begin an idea typed bare. The same holds for **subcommand names** themselves: the `prune` verb (added by `260612-drc1-add-prune-subcommand`) claims `prune` from the bare-text namespace — `idea prune the old cache` now routes to the subcommand (and errors under its `cobra.NoArgs`) instead of capturing an idea beginning with "prune"; `fmt` was accepted on the same bar by `260612-4m3a-add-fmt-canonicalizer-adoption` ("fmt" plausibly never begins bare idea prose).
 
 **Rejected aliases** (surveyed and rejected in the 04rt intake discussion; future proposals must clear the same bar): `remove`/`delete` (rm), `upgrade` (update), `cat` (show) — each plausibly starts bare-text idea prose; `undo` (reopen) — implies revert-last-action semantics worth reserving. Scope decision: `ls` is the only alias.
 

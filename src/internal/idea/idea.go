@@ -229,7 +229,10 @@ func WorktreeRoot() (string, error) {
 // File represents a loaded backlog file, preserving non-idea lines.
 type File struct {
 	// lines stores every line in order. Non-idea lines are stored as-is.
-	// Idea lines are stored as empty strings (their content comes from ideas).
+	// Idea lines store their raw on-disk text (post-\r-strip); render's
+	// rebuild overwrites those slots from FormatLine, so the raw value is
+	// never serialized — it exists so Fmt can compare each regenerated line
+	// against the original (per-line "normalized" counting).
 	lines []string
 	// ideaIndices maps from ideas slice index to lines slice index.
 	ideaIndices []int
@@ -243,11 +246,16 @@ func LoadFile(path string) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseContent(string(data)), nil
+}
 
+// parseContent parses backlog file content into a File. It is the single
+// parse walk shared by LoadFile and Fmt (which needs the original bytes for
+// byte-stability detection and so reads the file itself).
+func parseContent(content string) *File {
 	f := &File{}
-	content := string(data)
 	if content == "" {
-		return f, nil
+		return f
 	}
 
 	// Trim a single trailing newline (the canonical EOF newline) so that a
@@ -266,7 +274,7 @@ func LoadFile(path string) (*File, error) {
 		// *content* is otherwise preserved verbatim per Constitution I).
 		line = strings.TrimSuffix(line, "\r")
 		if idea, ok := ParseLine(line); ok {
-			f.lines = append(f.lines, "") // placeholder
+			f.lines = append(f.lines, line) // raw text; rebuilt from FormatLine on save
 			f.ideaIndices = append(f.ideaIndices, i)
 			f.ideas = append(f.ideas, idea)
 		} else {
@@ -274,7 +282,7 @@ func LoadFile(path string) (*File, error) {
 		}
 	}
 
-	return f, nil
+	return f
 }
 
 // SaveFile writes the backlog file, reconstructing from preserved lines and ideas.
@@ -292,6 +300,18 @@ func LoadFile(path string) (*File, error) {
 // and then renamed over the target path, so a crash mid-write cannot leave the
 // backlog (the source of truth) partially written or empty.
 func SaveFile(f *File, path string) (int, error) {
+	content, backfilled := render(f)
+	if err := atomicWriteFile(path, []byte(content), 0644); err != nil {
+		return 0, err
+	}
+	return backfilled, nil
+}
+
+// render stamps today's date on dateless ideas (returning the backfill count)
+// and rebuilds the canonical file content without writing it. It is the single
+// serialization point: SaveFile writes its output, and Fmt compares it against
+// the on-disk bytes to decide whether a write (or a --check failure) is needed.
+func render(f *File) (string, int) {
 	backfilled := 0
 	today := time.Now().Format("2006-01-02")
 	for i := range f.ideas {
@@ -309,11 +329,7 @@ func SaveFile(f *File, path string) (int, error) {
 		result[idx] = FormatLine(f.ideas[i])
 	}
 
-	content := strings.Join(result, "\n") + "\n"
-	if err := atomicWriteFile(path, []byte(content), 0644); err != nil {
-		return 0, err
-	}
-	return backfilled, nil
+	return strings.Join(result, "\n") + "\n", backfilled
 }
 
 // atomicWriteFile writes data to path atomically by writing to a temp file
