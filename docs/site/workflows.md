@@ -9,37 +9,49 @@ New here? Start with the [install guide](install.md), then come back.
 
 ## Worktree-aware resolution
 
-`idea` resolves the backlog file based on *where you run it* — not on an
-environment default or a global config. By default it reads and writes the
-**current worktree's** `fab/backlog.md`.
+`idea` resolves the backlog file based on *where you run it*. Inside a git repo
+it reads and writes the **current worktree's** `fab/backlog.md` by default —
+predictable from your directory, never from stray environment state. Outside a
+repo (or with `--system` anywhere), it uses a **system-level backlog** at
+`~/.config/idea/backlog.md`, so capture works even where there's no repo.
 
 | Where you are | What you type | Which file `idea` touches |
 |---------------|---------------|----------------------------|
 | Main repo | `idea add "..."` | `<main>/fab/backlog.md` |
 | Linked worktree | `idea add "..."` | `<worktree>/fab/backlog.md` (local to this worktree) |
 | Linked worktree | `idea --main add "..."` | `<main>/fab/backlog.md` (shared with the team) |
-| Anywhere | `idea --file path/to/file.md ...` | that file (relative to the git root) |
-| Anywhere | `IDEAS_FILE=... idea ...` | the env-var path |
+| Outside any git repo | `idea add "..."` | `~/.config/idea/backlog.md` (system backlog — automatic fallback) |
+| Anywhere | `idea --system add "..."` | `~/.config/idea/backlog.md` (system backlog, even inside a repo) |
+| Anywhere | `idea --file path/to/file.md ...` | that file (relative to the git root, or to `~/.config/idea` outside a repo) |
+| Anywhere | `IDEAS_FILE=... idea ...` | the env-var path (same rooting as `--file`) |
 
-How resolution actually works under the hood:
+How resolution actually works under the hood (first match wins):
 
-- **Current worktree** (the default): `idea` runs `git rev-parse --show-toplevel`
-  and uses `<toplevel>/fab/backlog.md`.
+- **`--system`**: skips git entirely and uses the system backlog —
+  `$XDG_CONFIG_HOME/idea/backlog.md`, defaulting to `~/.config/idea/backlog.md`.
+  Reachable from anywhere, including inside a repo. Mutually exclusive with `--main`.
+- **`--file <path>` / `IDEAS_FILE`**: overrides the path. A relative value is
+  rooted at the git root inside a repo, or at `~/.config/idea` outside one; an
+  absolute value is used verbatim.
 - **`--main`**: `idea` runs `git rev-parse --path-format=absolute --git-common-dir`
   and takes that directory's parent as the main worktree root, then uses
-  `<main>/fab/backlog.md`. In the *main* worktree, `--main` and the default
-  behave identically.
-- **`--file <path>`**: overrides the path entirely (resolved relative to the git
-  root).
-- **`IDEAS_FILE`**: same override via environment variable.
+  `<main>/fab/backlog.md`. Git-only — it errors outside a repo. In the *main*
+  worktree, `--main` and the default behave identically.
+- **Current worktree** (the in-repo default): `idea` runs `git rev-parse --show-toplevel`
+  and uses `<toplevel>/fab/backlog.md`.
+- **System fallback** (the out-of-repo default): when `git rev-parse` reports
+  you're not in a repo, `idea` gracefully falls back to the system backlog
+  instead of erroring. The config directory is created on first write.
 
 **Why the default favors the current worktree.** When you're heads-down on a
 change in a linked worktree and capture a thought, you almost always mean "for
 *this* branch." Defaulting to the current worktree keeps parallel changes from
 stepping on each other's backlogs. `--main` is the explicit opt-in for "add this
-to the shared roadmap." Resolution never reads heuristics or stray environment
-state — it asks git directly, so behavior is predictable from your current
-directory alone.
+to the shared roadmap." Inside a repo, resolution never reads heuristics or stray
+environment state — it asks git directly, so behavior is predictable from your
+current directory alone. The system backlog (`--system`, or the automatic
+out-of-repo fallback) is the one deliberate exception: a single personal list for
+cross-cutting ideas and for capture wherever there's no repo at all.
 
 ## fab-kit integration loop
 
