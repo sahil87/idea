@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sahil87/idea/internal/idea"
 )
 
 // buildBinary builds the idea binary to a temp location for integration tests.
@@ -405,11 +407,13 @@ func TestPrune_CLIOutputContract(t *testing.T) {
 		wantBacklog string // "" means unchanged
 	}{
 		{
-			name:       "dry run lists done ideas on stdout and hints on stderr",
+			name:       "dry run lists done ideas on stdout, count header + hint on stderr",
 			backlog:    mixed,
 			args:       []string{"prune"},
 			wantStdout: "- [x] [d0ne] 2026-06-02: prune me\n- [x] [d1ne] 2026-06-03: prune me too\n",
-			wantStderr: "Re-run with --force to confirm.\n",
+			// Non-TTY (piped) path: the leading count header (feature B) plus
+			// the classic trailing fallback hint, in that order.
+			wantStderr: "2 done idea(s) would be pruned\nRe-run with --force to confirm.\n",
 		},
 		{
 			name:        "force prints count only and removes the done lines",
@@ -708,5 +712,288 @@ func TestEdit_MultilineSingleLineConfirmation(t *testing.T) {
 	want := "Updated: - [ ] [ab12] 2026-06-10: new first\\nnew second\n"
 	if stdout != want {
 		t.Errorf("edit confirmation:\ngot:  %q\nwant: %q", stdout, want)
+	}
+}
+
+// TestList_IDFilter covers the optional [id...] positional filter: listing only
+// the requested IDs, the warn-and-list-the-rest behavior for well-formed-but-
+// absent IDs, and the usage error for a malformed ID. The subprocess pipes its
+// output, so list emits canonical FormatLine lines (the non-TTY path) — which
+// also pins the pipe contract (no ANSI, no truncation).
+func TestList_IDFilter(t *testing.T) {
+	bin := buildBinary(t)
+
+	const seed = "# Backlog\n\n" +
+		"- [ ] [ab12] 2026-06-01: first idea\n" +
+		"- [ ] [cd34] 2026-06-02: second idea\n" +
+		"- [ ] [ef56] 2026-06-03: third idea\n"
+
+	tests := []struct {
+		name       string
+		args       []string
+		wantStdout string
+		wantStderr []string // required stderr substrings
+		noStdout   []string // forbidden stdout substrings
+		wantErr    bool
+	}{
+		{
+			name:       "filter to a subset by id",
+			args:       []string{"ls", "ab12", "ef56", "--sort", "id"},
+			wantStdout: "- [ ] [ab12] 2026-06-01: first idea\n- [ ] [ef56] 2026-06-03: third idea\n",
+			noStdout:   []string{"cd34"},
+		},
+		{
+			name:       "unknown id warns on stderr and lists the rest",
+			args:       []string{"ls", "ab12", "zzzz"},
+			wantStdout: "- [ ] [ab12] 2026-06-01: first idea\n",
+			wantStderr: []string{`no idea with ID "zzzz"`},
+			noStdout:   []string{"zzzz"},
+		},
+		{
+			name:       "all-unknown ids warn and fall through to empty message",
+			args:       []string{"ls", "yyyy", "zzzz"},
+			wantStdout: "No ideas found.\n",
+			wantStderr: []string{`no idea with ID "yyyy"`, `no idea with ID "zzzz"`},
+		},
+		{
+			name:    "malformed id is a usage error",
+			args:    []string{"ls", "TOOLONG"},
+			wantErr: true,
+			wantStderr: []string{
+				"invalid ID",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			writeRepoBacklog(t, repo, seed)
+
+			stdout, stderr, err := runSplit(t, bin, repo, tt.args...)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got none\nstdout=%q stderr=%q", stdout, stderr)
+				}
+			} else if err != nil {
+				t.Fatalf("%v failed: %v\nstdout=%q stderr=%q", tt.args, err, stdout, stderr)
+			}
+
+			if tt.wantStdout != "" && stdout != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			for _, sub := range tt.wantStderr {
+				if !strings.Contains(stderr, sub) {
+					t.Errorf("stderr %q missing %q", stderr, sub)
+				}
+			}
+			for _, sub := range tt.noStdout {
+				if strings.Contains(stdout, sub) {
+					t.Errorf("stdout %q should not contain %q", stdout, sub)
+				}
+			}
+		})
+	}
+}
+
+// TestList_PipedOutputIsCanonical pins the pipe contract: piped `ls` and
+// `ls --full` emit byte-identical canonical FormatLine output (no ANSI, no
+// ellipsis truncation) regardless of --full, since the subprocess is not a TTY.
+func TestList_PipedOutputIsCanonical(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+	// A long idea that WOULD truncate on a narrow terminal.
+	long := strings.Repeat("x", 300)
+	writeRepoBacklog(t, repo, "- [ ] [ab12] 2026-06-01: "+long+"\n")
+
+	plain, _, err := runSplit(t, bin, repo, "ls")
+	if err != nil {
+		t.Fatalf("ls failed: %v", err)
+	}
+	full, _, err := runSplit(t, bin, repo, "ls", "--full")
+	if err != nil {
+		t.Fatalf("ls --full failed: %v", err)
+	}
+	want := "- [ ] [ab12] 2026-06-01: " + long + "\n"
+	if plain != want {
+		t.Errorf("piped ls stdout:\ngot:  %q\nwant: %q", plain, want)
+	}
+	if full != want {
+		t.Errorf("piped ls --full stdout:\ngot:  %q\nwant: %q", full, want)
+	}
+	if strings.Contains(plain, "\033[") || strings.Contains(plain, "…") {
+		t.Errorf("piped output leaked ANSI/ellipsis: %q", plain)
+	}
+}
+
+// TestPrune_CountHeaderAndDecisionMatrix covers feature B (the leading stderr
+// count header) and the non-TTY rows of the feature E decision matrix. The
+// subprocess pipes stdout (never a TTY), so: no-force prints the header + the
+// removable lines on stdout + the trailing fallback hint and never prompts;
+// --force deletes immediately. The interactive TTY prompt is verified at the
+// seam level (internal/idea term tests) since it requires a real terminal.
+func TestPrune_CountHeaderAndDecisionMatrix(t *testing.T) {
+	bin := buildBinary(t)
+
+	mixed := "# Backlog\n\n" +
+		"- [ ] [op3n] 2026-06-01: keep me\n" +
+		"- [x] [d0ne] 2026-06-02: prune me\n" +
+		"- [x] [d1ne] 2026-06-03: prune me too\n"
+
+	tests := []struct {
+		name        string
+		args        []string
+		wantStdout  string
+		wantStderr  []string // required stderr substrings (in addition to header)
+		noStderr    []string // forbidden stderr substrings
+		wantBacklog string   // "" means unchanged
+	}{
+		{
+			name:       "non-tty no-force: header + lines on stdout + fallback hint, no prompt",
+			args:       []string{"prune"},
+			wantStdout: "- [x] [d0ne] 2026-06-02: prune me\n- [x] [d1ne] 2026-06-03: prune me too\n",
+			wantStderr: []string{"2 done idea(s) would be pruned", "Re-run with --force to confirm."},
+			noStderr:   []string{"[y/N]"},
+		},
+		{
+			name:        "non-tty force: deletes immediately, count only",
+			args:        []string{"prune", "--force"},
+			wantStdout:  "Pruned 2 done idea(s).\n",
+			noStderr:    []string{"would be pruned", "[y/N]"},
+			wantBacklog: "# Backlog\n\n- [ ] [op3n] 2026-06-01: keep me\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			writeRepoBacklog(t, repo, mixed)
+
+			stdout, stderr, err := runSplit(t, bin, repo, tt.args...)
+			if err != nil {
+				t.Fatalf("%v failed: %v\nstdout=%q stderr=%q", tt.args, err, stdout, stderr)
+			}
+			if stdout != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			for _, sub := range tt.wantStderr {
+				if !strings.Contains(stderr, sub) {
+					t.Errorf("stderr %q missing %q", stderr, sub)
+				}
+			}
+			for _, sub := range tt.noStderr {
+				if strings.Contains(stderr, sub) {
+					t.Errorf("stderr %q should not contain %q", stderr, sub)
+				}
+			}
+
+			want := tt.wantBacklog
+			if want == "" {
+				want = mixed
+			}
+			if got := readRepoBacklog(t, repo); got != want {
+				t.Errorf("backlog:\ngot:\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestConfirmPrune covers the [y/N] confirm logic in-process (feature E). It
+// reads cmd.InOrStdin(), so it is unit-testable without a PTY by feeding a
+// buffer: only "y"/"yes" (case-insensitive, trimmed) confirm; everything else —
+// including bare Enter and EOF (no input) — aborts. The TTY gating that decides
+// whether confirmPrune is even reached is exercised by the seam tests; here we
+// pin the decision itself.
+func TestConfirmPrune(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{name: "y confirms", input: "y\n", want: true},
+		{name: "yes confirms", input: "yes\n", want: true},
+		{name: "uppercase Y confirms", input: "Y\n", want: true},
+		{name: "YES confirms", input: "YES\n", want: true},
+		{name: "y with surrounding spaces confirms", input: "  y  \n", want: true},
+		{name: "n aborts", input: "n\n", want: false},
+		{name: "no aborts", input: "no\n", want: false},
+		{name: "bare enter aborts", input: "\n", want: false},
+		{name: "EOF (no input) aborts", input: "", want: false},
+		{name: "garbage aborts", input: "yep\n", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := newRootCmd()
+			cmd.SetIn(strings.NewReader(tt.input))
+			cmd.SetErr(&bytes.Buffer{}) // swallow the prompt
+			if got := confirmPrune(cmd, 2); got != tt.want {
+				t.Errorf("confirmPrune(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPrune_ConfirmedDeleteAndAbort proves the two file-state outcomes of the
+// interactive confirm (closing acceptance A-008's TTY rows and A-011 with real
+// tests rather than code inspection): a "y"/"yes" answer deletes exactly like
+// --force, while any abort answer leaves the backlog byte-identical. It mirrors
+// the prune RunE guard — idea.Prune(path, true) runs only when confirmPrune
+// returns true — using the real internal/idea seam, so the confirm logic and
+// the resulting write (or no-write) are tested together without a PTY.
+func TestPrune_ConfirmedDeleteAndAbort(t *testing.T) {
+	const mixed = "# Backlog\n\n" +
+		"- [ ] [op3n] 2026-06-01: keep me\n" +
+		"- [x] [d0ne] 2026-06-02: prune me\n" +
+		"- [x] [d1ne] 2026-06-03: prune me too\n"
+	const pruned = "# Backlog\n\n- [ ] [op3n] 2026-06-01: keep me\n"
+
+	tests := []struct {
+		name        string
+		input       string
+		wantConfirm bool
+		wantBacklog string
+	}{
+		{name: "y deletes the done ideas", input: "y\n", wantConfirm: true, wantBacklog: pruned},
+		{name: "yes deletes the done ideas", input: "yes\n", wantConfirm: true, wantBacklog: pruned},
+		{name: "n leaves the backlog byte-identical", input: "n\n", wantConfirm: false, wantBacklog: mixed},
+		{name: "EOF leaves the backlog byte-identical", input: "", wantConfirm: false, wantBacklog: mixed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "backlog.md")
+			if err := os.WriteFile(path, []byte(mixed), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			cmd := newRootCmd()
+			cmd.SetIn(strings.NewReader(tt.input))
+			cmd.SetErr(&bytes.Buffer{})
+
+			// Mirror the prune RunE guard exactly: dry run first (never writes),
+			// then delete only on a confirmed answer.
+			if _, _, err := idea.Prune(path, false); err != nil {
+				t.Fatalf("dry-run prune: %v", err)
+			}
+			confirmed := confirmPrune(cmd, 2)
+			if confirmed != tt.wantConfirm {
+				t.Fatalf("confirmPrune = %v, want %v", confirmed, tt.wantConfirm)
+			}
+			if confirmed {
+				if _, _, err := idea.Prune(path, true); err != nil {
+					t.Fatalf("confirmed prune: %v", err)
+				}
+			}
+
+			got, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tt.wantBacklog {
+				t.Errorf("backlog:\ngot:\n%s\nwant:\n%s", got, tt.wantBacklog)
+			}
+		})
 	}
 }
