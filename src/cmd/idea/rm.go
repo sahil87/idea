@@ -20,9 +20,9 @@ substring of its text. If it matches more than one idea it is refused and the
 ambiguous matches are listed, so you can be more specific or use the exact ID.
 --force is required to confirm the deletion; without it the command refuses to
 remove anything. --main targets the main worktree's backlog, --system targets
-the system-level backlog (~/.config/idea/backlog.md), and --file / IDEAS_FILE
-point elsewhere (see "idea --help"). Outside a git repo the system backlog is
-used automatically.
+the system-level backlog ($XDG_CONFIG_HOME/idea/backlog.md, else
+~/.config/idea/backlog.md), and --file / IDEAS_FILE point elsewhere (see
+"idea --help"). Outside a git repo the system backlog is used automatically.
 
   idea rm a7k2 --force`,
 		Args: cobra.ExactArgs(1),

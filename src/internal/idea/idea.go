@@ -377,10 +377,9 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 
 // ResolveFilePath determines the backlog file path.
 // Priority: flagValue > IDEAS_FILE env > default (fab/backlog.md).
-// The result is relative to repoRoot. An absolute flagValue / IDEAS_FILE value
-// is honored verbatim (filepath.Join leaves an absolute second element intact
-// only on its own; we guard it explicitly so an out-of-git config-dir root does
-// not get prepended to an absolute override).
+// A relative override is resolved against repoRoot; an absolute flagValue /
+// IDEAS_FILE value is honored verbatim (via joinRoot, which short-circuits on
+// an absolute override) so it stays stable regardless of which root resolved.
 func ResolveFilePath(repoRoot, flagValue string) string {
 	if flagValue != "" {
 		return joinRoot(repoRoot, flagValue)
@@ -417,16 +416,23 @@ func SystemBacklogPath() (string, error) {
 }
 
 // ResolveBacklogPath determines the backlog file path from the three persistent
-// flag inputs, encoding the full resolution precedence (first match wins):
+// flag inputs. systemFlag short-circuits everything; otherwise mainFlag selects
+// which root is used, and fileFlag / IDEAS_FILE (if any) are applied *within*
+// that selected root — so --file and --main are not independent alternatives,
+// they compose. The precedence (first match wins):
 //
-//  1. systemFlag set            → the system backlog (git is skipped entirely).
-//  2. fileFlag / IDEAS_FILE set → joined to the git root when inside a repo,
-//     else to the system config dir (an absolute value is honored verbatim).
-//  3. mainFlag set              → the main worktree root (git-only; errors
-//     outside a repo, unchanged).
-//  4. inside a git repo         → {worktree-root}/fab/backlog.md (the unchanged
-//     default).
-//  5. outside a git repo        → the system backlog (the graceful fallback).
+//  1. systemFlag set    → the system backlog (git is skipped entirely).
+//  2. mainFlag set       → root = main worktree root (git-only; errors outside a
+//     repo, unchanged). fileFlag / IDEAS_FILE, if set, are rooted here.
+//  3. inside a git repo  → root = current worktree root. fileFlag / IDEAS_FILE,
+//     if set, are rooted here; otherwise {worktree-root}/fab/backlog.md (the
+//     unchanged default).
+//  4. outside a git repo → root = system config dir. fileFlag / IDEAS_FILE, if
+//     set, are rooted here; otherwise the system backlog (the graceful
+//     fallback).
+//
+// In all rooted cases an absolute fileFlag / IDEAS_FILE value is honored
+// verbatim (see joinRoot).
 //
 // systemFlag and mainFlag are mutually exclusive: both select a root, so passing
 // both is a user error and returns a non-nil error without resolving a path.
