@@ -31,7 +31,7 @@ func TestTermWidth_Fallback(t *testing.T) {
 			if tt.setEnv {
 				t.Setenv("COLUMNS", tt.columns)
 			} else {
-				os.Unsetenv("COLUMNS")
+				unsetEnvForTest(t, "COLUMNS")
 			}
 			// A nil file skips the GetSize branch deterministically (os.Stdout
 			// is not a real terminal under `go test` either, but nil is the
@@ -71,7 +71,7 @@ func TestUseColor_TTYGate(t *testing.T) {
 	defer f.Close()
 
 	// Not a TTY: always false, even with NO_COLOR unset.
-	os.Unsetenv("NO_COLOR")
+	unsetEnvForTest(t, "NO_COLOR")
 	if UseColor(f) {
 		t.Error("UseColor(non-tty) = true, want false (TTY gate)")
 	}
@@ -101,20 +101,18 @@ func TestDisplayListLine(t *testing.T) {
 	prefixLen := len("- [ ] [ab12] 2026-06-01: ")
 
 	tests := []struct {
-		name      string
-		idea      Idea
-		width     int
-		full      bool
-		color     bool
-		want      string
-		wantNoCut bool // when true, output must equal the full untruncated line
+		name  string
+		idea  Idea
+		width int
+		full  bool
+		color bool
+		want  string
 	}{
 		{
-			name:      "fits within width is untouched",
-			idea:      openShort,
-			width:     80,
-			want:      "- [ ] [ab12] 2026-06-01: short text",
-			wantNoCut: true,
+			name:  "fits within width is untouched",
+			idea:  openShort,
+			width: 80,
+			want:  "- [ ] [ab12] 2026-06-01: short text",
 		},
 		{
 			name:  "over-wide text is clipped with ellipsis, prefix intact",
@@ -192,6 +190,22 @@ func TestDisplayListLine_ColorAfterTruncation(t *testing.T) {
 	if stripped := stripANSI(colored); stripped != plain {
 		t.Errorf("ANSI-stripped colored line = %q, want %q (color must not change visible text)", stripped, plain)
 	}
+}
+
+// unsetEnvForTest forces key to be unset for the duration of the test, capturing
+// any prior value and restoring it via t.Cleanup so the unset state never leaks
+// into other tests (t.Setenv only restores a value it set, not a deletion).
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+	prev, had := os.LookupEnv(key)
+	os.Unsetenv(key)
+	t.Cleanup(func() {
+		if had {
+			os.Setenv(key, prev)
+		} else {
+			os.Unsetenv(key)
+		}
+	})
 }
 
 // stripANSI removes ANSI escape sequences for visible-text comparison in tests.

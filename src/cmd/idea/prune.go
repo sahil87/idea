@@ -73,8 +73,10 @@ elsewhere (see "idea --help").
 				return nil
 			}
 
-			// Confirmed: perform the deletion via the same force path.
-			_, backfilled, err = idea.Prune(path, true)
+			// Confirmed: perform the deletion via the same force path. Use the
+			// count from this confirmed prune (not the earlier dry run) so the
+			// reported total is accurate even if the file changed in between.
+			pruned, backfilled, err = idea.Prune(path, true)
 			if err != nil {
 				return err
 			}

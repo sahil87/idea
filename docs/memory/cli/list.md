@@ -63,5 +63,3 @@ The split is deliberate: a malformed argument is a *usage mistake* (caught up fr
 - Command table: `../../specs/overview.md` (note: the overview still describes the pre-change `list` row).
 - Constitution Principles IV (logic in `internal/idea`) and VI (machine-parseable stdout): `fab/project/constitution.md`.
 - Originating change: `260613-kfcl-tty-aware-output-rendering`.
-</content>
-</invoke>

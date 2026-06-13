@@ -129,9 +129,11 @@ func filterByIDs(cmd *cobra.Command, ideas []idea.Idea, wantIDs []string) []idea
 		}
 	}
 
+	warned := make(map[string]bool, len(wantIDs))
 	for _, id := range wantIDs {
-		if !found[id] {
+		if !found[id] && !warned[id] {
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: no idea with ID %q\n", id)
+			warned[id] = true
 		}
 	}
 	return result
