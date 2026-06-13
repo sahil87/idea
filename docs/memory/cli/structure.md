@@ -1,5 +1,5 @@
 ---
-description: "Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), help-dump contract, and version stamping"
+description: "Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), the TTY/width/color/truncation seam (internal/idea/term.go) + shared printIdeaLines render path, the golang.org/x/term direct dependency, help-dump contract, and version stamping"
 ---
 
 # CLI Source Structure
@@ -16,6 +16,7 @@ src/
     idea/                      # cobra entry point; one file per subcommand
       main.go                  # newRootCmd() factory + main()
       add.go list.go show.go done.go reopen.go edit.go rm.go prune.go fmt.go resolve.go update.go shell_init.go
+      output.go                # printIdeaLines: the single TTY-aware list/prune render path
       help_dump.go             # hidden "help-dump" subcommand (CLI tree → JSON)
       main_test.go fmt_test.go shell_init_test.go help_dump_test.go
   internal/
@@ -26,12 +27,14 @@ src/
       editor_test.go
       fmt.go                   # idea fmt: Fmt/FmtResult + bare-checkbox adoption
       fmt_test.go
+      term.go                  # TTY/width/color/truncation seam (DisplayListLine)
+      term_test.go
       prune_test.go
       update.go
       update_test.go
 ```
 
-The module path is `github.com/sahil87/idea` (matches the GitHub repo URL). Direct dependencies are limited to `github.com/spf13/cobra` plus the standard library, per the constitution's dependency-discipline principle.
+The module path is `github.com/sahil87/idea` (matches the GitHub repo URL). Direct dependencies are `github.com/spf13/cobra` plus `golang.org/x/term` (the **first** non-stdlib/cobra direct dependency, added by `260613-kfcl-tty-aware-output-rendering` for terminal isatty + width detection — stdlib has no width primitive). The constitution's Dependency Discipline principle requires per-change justification rather than a hard cap; `x/term` was justified in that change's intake. It is pinned at `v0.27.0` (with `golang.org/x/sys v0.28.0` indirect) specifically to keep the `go 1.22` directive unchanged — a newer `x/term` would have bumped the directive to 1.25 (Build Reproducibility).
 
 ## Why this shape
 
@@ -106,16 +109,18 @@ The helpers are exported from `internal/idea` and built on package-level `string
 
 **In-memory real, on-disk escaped.** `ParseLine` applies `UnescapeText` to the captured text group — *after* the Shape B precision guard, which evaluates the raw on-disk text. `Idea.Text` therefore always holds the **real** text (raw newlines, raw backslashes) while the file holds the escaped form. Consequences: `MarshalJSON` needed no change (JSON encodes the newlines itself, so `--json` output carries real newlines in `text`), and `Match`/query semantics operate on the real text the user typed.
 
-**Display semantics per command:**
+**Display semantics per command.** `idea list`/`ls` and the `idea prune` dry-run/pre-confirm listing are **TTY-aware** (since `260613-kfcl-tty-aware-output-rendering`): on a terminal they truncate text to the width and color the prefix/checkbox via `DisplayListLine`; when piped or redirected they emit the full canonical `FormatLine` regardless, preserving the line-per-record pipe contract (Constitution VI). Both route through the single `printIdeaLines` helper (see § Shared TTY-aware render path). `--json`, `show`, and all confirmations are unchanged.
 
 | Output | Form |
 |--------|------|
-| `idea list` (incl. `--done`, `--all`) | escaped one line per idea via `FormatLine` — the line-per-record guarantee for external pipelines |
+| `idea list` / `ls` (incl. `--done`, `--all`, `[id...]`) — **TTY** | one line per idea via `DisplayListLine`: text truncated to width with `…` (unless `--full`), `[id] date:` prefix dimmed, done `[x]` greened (unless `NO_COLOR`) — see `list.md` |
+| `idea list` / `ls` — **piped/redirected** | escaped one line per idea via `FormatLine` (no truncation, no ANSI) regardless of `--full` — the line-per-record guarantee for external pipelines |
 | `idea show` (plain) | `DisplayLine` — real newlines; continuation lines render below the `- [x] [id] date: ` prefix line |
-| `list --json` / `show --json` | real newlines in the `text` field (unchanged `MarshalJSON`) |
+| `list --json` / `show --json` | real newlines in the `text` field (unchanged `MarshalJSON`); display features never touch JSON |
 | confirmations — `Added:` (via `idea.EscapeText` in `cmd/idea/add.go`); `Updated:`/`Done:`/`Removed:`/`Reopened:` (via `FormatLine`) | escaped single line — stdout stays machine-parseable (Constitution VI) |
-| `idea prune` (dry run) | escaped one line per removable done idea via `FormatLine` on stdout (pipe-friendly, e.g. `idea prune \| wc -l`); the confirm hint `Re-run with --force to confirm.` goes to **stderr** |
-| `idea prune --force` confirmation | `Pruned N done idea(s).` — count only, no per-line listing (per-line is reserved for the dry run; see `prune.md`) |
+| `idea prune` (dry run / pre-confirm) — **TTY** | removable done ideas via `DisplayListLine` (truncated/colored unless `--full`) on stdout; a `N done idea(s) would be pruned` count header + a `Prune N done idea(s)? [y/N]` confirm prompt on **stderr** — see `prune.md` |
+| `idea prune` (dry run) — **piped/redirected** | escaped one line per removable done idea via `FormatLine` on stdout (pipe-friendly, e.g. `idea prune \| wc -l`); the count header + `Re-run with --force to confirm.` hint go to **stderr**; never prompts |
+| `idea prune --force` confirmation | `Pruned N done idea(s).` — count only, no per-line listing (per-line is reserved for the non-force paths; see `prune.md`) |
 
 **Legacy backslash policy (pre-convention files).** Lines written before the escape convention may contain literal backslashes:
 
@@ -167,6 +172,27 @@ with two guards evaluated on the **whitespace-trimmed** captured text — trimme
 **Governance note (Constitution I).** Adoption narrows the round-trip preservation guarantee: bare checkbox lines lacking the `[id]` anchor were previously guaranteed non-idea pass-through, and `fmt` (and only `fmt`) now claims them. The carve-out is documented in `../../specs/backlog-format.md` (Round-Trip Preservation carve-out + format-contract change note) but the constitution text itself is unamended — judged defensible at review because `fmt` is an explicit migration verb the user invokes, not round-trip parsing; a future constitution amendment could codify the carve-out explicitly.
 
 **Uniqueness blind spot (consistent, accepted).** Adopted-ID uniqueness checks parsed ideas only — a 4-char bracket inside an unparseable line is invisible to it, exactly as it is to `Add`'s `checkIDCollision`.
+
+## TTY/width/color/truncation seam (`internal/idea/term.go`)
+
+`internal/idea/term.go` (added by `260613-kfcl-tty-aware-output-rendering`) is the single home of all terminal-aware rendering logic — the Constitution IV seam for the display features. `cmd/` only asks it for a decision (is this a TTY? how wide? use color?) and for a ready-to-print display line; `FormatLine`/`DisplayLine` stay the machine/canonical renderers and are intentionally untouched (display-only change). The exported surface:
+
+| Symbol | Role |
+|--------|------|
+| `IsTTY(f *os.File) bool` | `term.IsTerminal(int(f.Fd()))`; nil-safe (returns false). The single gate every display change keys on so piped/redirected output stays canonical (Constitution VI). |
+| `TermWidth(f *os.File) int` | Resolution order `term.GetSize` → `$COLUMNS` (when it parses to a positive int) → the `defaultTermWidth` const (80). |
+| `UseColor(f *os.File) bool` | True only when `f` is a TTY **and** `NO_COLOR` is unset. Uses `os.LookupEnv` presence (not truthiness) per the NO_COLOR spec — any value, including empty, disables color. |
+| `DisplayListLine(i Idea, width int, full, color bool) string` | The rune-safe display-line builder (below). Has exactly **one** caller: `printIdeaLines` in `cmd/idea/output.go`. |
+
+Internal helpers: `truncateText(text string, avail int)` (rune-safe `[]rune` clip with the `ellipsis` U+2026 const, multiline-at-first-`\n`), `dimPrefix`/`greenCheck` (ANSI wrappers). ANSI codes are named consts (`ansiReset`/`ansiFaint`/`ansiGreen`), and 80 is the named `defaultTermWidth` const — no magic numbers/strings (code-quality Anti-Patterns).
+
+**Width is a parameter, not read inside the builder**, so tests inject it rather than allocating a real PTY (Constitution V). **Color is applied AFTER truncation** so the width math counts visible runes, never escape bytes. The `- [done] [id] date: ` prefix is never truncated; when colored, the checkbox is its own (green-when-done) span between two dim spans so the id/date stay faint. Full truncation/color contract: `list.md`.
+
+`internal/idea/term_test.go` is table-driven against the seam (Constitution V): `TermWidth` fallback (GetSize-fail via the non-TTY path + `$COLUMNS` set/unset/invalid → 80), `UseColor`/color helpers honoring `NO_COLOR`, and `DisplayListLine` (multibyte rune-safety, prefix-never-truncated, ellipsis presence, multiline-at-first-newline, `full` bypasses truncation, color applied after truncation).
+
+### Shared TTY-aware render path (`cmd/idea/output.go`)
+
+`printIdeaLines(out io.Writer, ideas []idea.Idea, full bool)` in `cmd/idea/output.go` is the **single** TTY-aware render path, shared by `list.go` and `prune.go` (extracted during this change's review rework so the render loop is not duplicated — code-quality Anti-Patterns, A-017). It keys the TTY/width/color decision on `os.Stdout` (the real destination) while writing to `out` (normally `os.Stdout` in production, a buffer under test): on a TTY each idea renders via `idea.DisplayListLine(i, width, full, color)`; when piped it emits `idea.FormatLine(i)` regardless of `full`. The Constitution IV split holds — `output.go` only *picks the mode*; all truncation/color logic lives in `term.go`.
 
 ## Command help text (`Short` vs `Long`)
 
@@ -245,6 +271,7 @@ This wiring is required because `idea` is released independently:
 
 - Release pipeline that consumes this layout (build path, version stamping, Homebrew formula); shll.ai pulls the command reference via `idea help-dump` (the release no longer publishes it): `../release/pipeline.md`.
 - Self-update subcommand built on top of the Homebrew tap (`update.go` / `internal/idea/update.go`): `update.md`.
-- Bulk-remove subcommand (`prune.go` / `idea.Prune`): dry-run/`--force` contract, output channels, and the deliberate non-archival design: `prune.md`.
+- `idea list`/`ls` TTY-aware rendering contract — truncation, `--full`, the `[id...]` filter, and color (`list.go` / `internal/idea/term.go`): `list.md`.
+- Bulk-remove subcommand (`prune.go` / `idea.Prune`): dry-run/`--force` contract, the count header + interactive `[y/N]` confirm, output channels, and the deliberate non-archival design: `prune.md`.
 - `edit` subcommand two-form contract and the `$VISUAL`/`$EDITOR`/`vi` temp-file round trip (`edit.go` / `internal/idea/editor.go`): `edit.md`.
 - Constitution principles III and IV: `fab/project/constitution.md`.

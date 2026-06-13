@@ -1,0 +1,13 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-13T07:46:43Z"}
+{"args":"DX improvements to idea CLI output rendering: TTY-aware truncation (+--full, +ls id filter), prune count header, color/styling, interactive prune confirm; golang.org/x/term dependency","cmd":"fab-new","event":"command","ts":"2026-06-13T07:46:43Z"}
+{"delta":"+0.0","event":"confidence","score":0,"trigger":"calc-score","ts":"2026-06-13T07:48:04Z"}
+{"delta":"+0.0","event":"confidence","score":0,"trigger":"calc-score","ts":"2026-06-13T07:48:09Z"}
+{"delta":"+0.0","event":"confidence","score":0,"trigger":"calc-score","ts":"2026-06-13T07:48:20Z"}
+{"delta":"+3.5","event":"confidence","score":3.5,"trigger":"calc-score","ts":"2026-06-13T07:49:19Z"}
+{"delta":"+0.0","event":"confidence","score":3.5,"trigger":"calc-score","ts":"2026-06-13T07:49:27Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-06-13T07:52:16Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-06-13T07:52:31Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-06-13T08:02:22Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-06-13T08:11:26Z"}
+{"event":"review","result":"passed","ts":"2026-06-13T08:11:26Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-13T08:16:53Z"}
