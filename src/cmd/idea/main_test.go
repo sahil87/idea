@@ -997,3 +997,115 @@ func TestPrune_ConfirmedDeleteAndAbort(t *testing.T) {
 		})
 	}
 }
+
+// --- System Backlog & Out-of-Git Operation ---
+
+// systemEnv builds a minimal environment that isolates HOME/XDG_CONFIG_HOME at
+// the given config dir while preserving PATH (git lookups inside the binary
+// need it). Returns the env slice and the resolved system backlog path.
+func systemEnv(t *testing.T) (env []string, configDir, backlogPath string) {
+	t.Helper()
+	configDir = t.TempDir()
+	env = []string{
+		"HOME=" + configDir,
+		"XDG_CONFIG_HOME=" + configDir,
+		"PATH=" + os.Getenv("PATH"),
+	}
+	backlogPath = filepath.Join(configDir, "idea", "backlog.md")
+	return env, configDir, backlogPath
+}
+
+// TestSystem_OutOfGitFallback verifies that, outside any git repo, add/list
+// gracefully fall back to the system backlog instead of failing with
+// "not in a git repository".
+func TestSystem_OutOfGitFallback(t *testing.T) {
+	bin := buildBinary(t)
+	nonGit := t.TempDir() // not a git repo
+	env, _, backlogPath := systemEnv(t)
+
+	stdout, stderr, err := runSplitEnv(t, bin, nonGit, env, "add", "buy milk")
+	if err != nil {
+		t.Fatalf("add outside git failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "buy milk") {
+		t.Errorf("expected idea text in output, got: %q", stdout)
+	}
+	b, readErr := os.ReadFile(backlogPath)
+	if readErr != nil {
+		t.Fatalf("system backlog not written at %s: %v", backlogPath, readErr)
+	}
+	if !strings.Contains(string(b), "buy milk") {
+		t.Errorf("system backlog missing idea, got: %q", b)
+	}
+
+	// list outside git reads back the same system backlog.
+	stdout, stderr, err = runSplitEnv(t, bin, nonGit, env, "list")
+	if err != nil {
+		t.Fatalf("list outside git failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "buy milk") {
+		t.Errorf("list outside git missing idea, got: %q", stdout)
+	}
+}
+
+// TestSystem_FlagInsideRepo verifies that --system targets the system backlog
+// even when run inside a git repo, leaving the repo backlog untouched.
+func TestSystem_FlagInsideRepo(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+	env, _, backlogPath := systemEnv(t)
+
+	stdout, stderr, err := runSplitEnv(t, bin, repo, env, "--system", "global todo")
+	if err != nil {
+		t.Fatalf("--system add in repo failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+
+	// The system backlog gets the idea...
+	b, readErr := os.ReadFile(backlogPath)
+	if readErr != nil {
+		t.Fatalf("system backlog not written at %s: %v", backlogPath, readErr)
+	}
+	if !strings.Contains(string(b), "global todo") {
+		t.Errorf("system backlog missing idea, got: %q", b)
+	}
+	// ...and the repo backlog stays empty of it (only the seed header).
+	if repoContent := readRepoBacklog(t, repo); strings.Contains(repoContent, "global todo") {
+		t.Errorf("repo backlog should not contain the --system idea, got: %q", repoContent)
+	}
+}
+
+// TestSystem_ConflictWithMain verifies --system + --main is a user error.
+func TestSystem_ConflictWithMain(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+	env, _, _ := systemEnv(t)
+
+	stdout, stderr, err := runSplitEnv(t, bin, repo, env, "--system", "--main", "x")
+	if err == nil {
+		t.Fatalf("expected non-zero exit for --system --main, got success\nstdout=%q", stdout)
+	}
+	if !strings.Contains(stderr, "mutually exclusive") {
+		t.Errorf("expected conflict message on stderr, got: %q", stderr)
+	}
+}
+
+// TestSystem_OnDemandDirCreation verifies the config dir is created on the
+// first mutating write when it does not yet exist.
+func TestSystem_OnDemandDirCreation(t *testing.T) {
+	bin := buildBinary(t)
+	nonGit := t.TempDir()
+	env, configDir, backlogPath := systemEnv(t)
+
+	// Precondition: the idea config dir does not exist yet.
+	ideaDir := filepath.Join(configDir, "idea")
+	if _, err := os.Stat(ideaDir); !os.IsNotExist(err) {
+		t.Fatalf("precondition: %s should not exist, stat err=%v", ideaDir, err)
+	}
+
+	if _, stderr, err := runSplitEnv(t, bin, nonGit, env, "add", "first idea"); err != nil {
+		t.Fatalf("first add failed: %v\nstderr=%q", err, stderr)
+	}
+	if _, err := os.Stat(backlogPath); err != nil {
+		t.Fatalf("system backlog not created on first write: %v", err)
+	}
+}

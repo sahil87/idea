@@ -26,8 +26,9 @@ refused, and a non-zero editor exit aborts without touching the backlog.
 substring of its text. If it matches more than one idea it is refused and the
 ambiguous matches are listed, so you can be more specific or use the exact ID.
 --id and --date additionally change the matched idea's ID or date. --main
-targets the main worktree's backlog and --file / IDEAS_FILE point elsewhere
-(see "idea --help").
+targets the main worktree's backlog, --system targets the system-level backlog
+(~/.config/idea/backlog.md), and --file / IDEAS_FILE point elsewhere (see
+"idea --help"). Outside a git repo the system backlog is used automatically.
 
   idea edit a7k2 "wire up dark mode toggle"
   idea edit a7k2                  # open the current text in your editor

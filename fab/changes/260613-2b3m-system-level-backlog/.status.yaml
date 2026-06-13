@@ -1,0 +1,49 @@
+id: 2b3m
+name: 260613-2b3m-system-level-backlog
+created: 2026-06-13T07:43:29Z
+created_by: sahil-noon
+change_type: feat
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: active
+    review-pr: pending
+plan:
+    generated: true
+    task_count: 9
+    acceptance_count: 13
+    acceptance_completed: 0
+confidence:
+    certain: 6
+    confident: 3
+    tentative: 1
+    unresolved: 0
+    score: 3.1
+    fuzzy: true
+    dimensions:
+        signal: 74.8
+        reversibility: 76.0
+        competence: 80.5
+        disambiguation: 80.0
+stage_metrics:
+    intake: {started_at: "2026-06-13T07:43:29Z", driver: fab-new, iterations: 1, completed_at: "2026-06-13T07:46:44Z"}
+    apply: {started_at: "2026-06-13T07:46:44Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-13T07:54:47Z"}
+    review: {started_at: "2026-06-13T07:54:47Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-13T07:59:06Z"}
+    hydrate: {started_at: "2026-06-13T07:59:06Z", driver: fab-fff, iterations: 1, completed_at: "2026-06-13T08:01:31Z"}
+    ship: {started_at: "2026-06-13T08:01:31Z", driver: fab-fff, iterations: 1}
+prs: []
+true_impact:
+    added: 0
+    deleted: 0
+    net: 0
+    excluding:
+        added: 0
+        deleted: 0
+        net: 0
+    computed_at: "2026-06-13T08:01:31Z"
+    computed_at_stage: hydrate
+# true_impact: lazily created on first apply-finish (no placeholder here).
+last_updated: 2026-06-13T08:01:31Z

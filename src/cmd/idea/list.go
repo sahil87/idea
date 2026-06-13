@@ -29,8 +29,10 @@ On a terminal, long idea text is truncated to fit the width (the [id] date:
 prefix is never clipped) and the prefix is dimmed; --full shows the complete
 text. When the output is piped or redirected, full canonical lines are emitted
 regardless of --full so downstream tools see machine-parseable records. As with
-every backlog command, --main targets the main worktree's backlog and
---file / IDEAS_FILE point elsewhere (see "idea --help").
+every backlog command, --main targets the main worktree's backlog, --system
+targets the system-level backlog ($XDG_CONFIG_HOME/idea/backlog.md, else
+~/.config/idea/backlog.md), and --file / IDEAS_FILE point elsewhere (see
+"idea --help"). Outside a git repo the system backlog is used automatically.
 
   idea list
   idea list --all --sort id
