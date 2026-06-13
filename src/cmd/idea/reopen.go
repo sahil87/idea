@@ -16,8 +16,10 @@ func reopenCmd() *cobra.Command {
 <query> matches a done idea by its ID or by a case-insensitive substring of
 its text. If the query matches more than one done idea it is refused and the
 ambiguous matches are listed, so you can be more specific or use the exact ID.
---main targets the main worktree's backlog and --file / IDEAS_FILE point
-elsewhere (see "idea --help").
+--main targets the main worktree's backlog, --system targets the system-level
+backlog ($XDG_CONFIG_HOME/idea/backlog.md, else ~/.config/idea/backlog.md), and
+--file / IDEAS_FILE point elsewhere (see "idea --help"). Outside a git repo the
+system backlog is used automatically.
 
   idea reopen a7k2
   idea reopen "dark mode"`,

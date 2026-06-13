@@ -24,7 +24,22 @@ The manual installer builds the binary via `./scripts/build.sh` and copies it to
 
 By default, `idea` operates on the **current worktree's** `fab/backlog.md` (resolved via `git rev-parse --show-toplevel`). Pass `--main` to target the main worktree's backlog instead; internally, `idea` resolves the main worktree root by running `git rev-parse --path-format=absolute --git-common-dir` and taking its parent directory. In the main worktree, both behave identically. This ensures that users in a linked worktree get predictable local behavior unless they explicitly opt into the shared backlog.
 
-The backlog file path can also be overridden globally by `--file <path>` (relative to the resolved git root) or by setting the `IDEAS_FILE` environment variable.
+The backlog file path can also be overridden globally by `--file <path>` or by setting the `IDEAS_FILE` environment variable.
+
+### System backlog and out-of-git operation
+
+`idea` also works **outside any git repository** and offers a **system-level backlog** for cross-repo idea capture. The system backlog lives at `$XDG_CONFIG_HOME/idea/backlog.md` when `XDG_CONFIG_HOME` is set, and `~/.config/idea/backlog.md` otherwise (resolved via Go's `os.UserConfigDir`). Its parent directory is created on demand on the first mutating write. The file format and all command semantics are identical to a repo backlog — only the path differs.
+
+The backlog path is resolved by this precedence (first match wins). Note that `--main` and `--file`/`IDEAS_FILE` are **not** independent alternatives: `--main` selects which *root* is used, and `--file`/`IDEAS_FILE` (when set) are applied *within* that selected root.
+
+1. **`--system`** — the system backlog, skipping git entirely (reachable from inside a repo too).
+2. **`--main`** — root = the main worktree root. Git-only: it still errors with `not in a git repository` outside a repo. A `--file`/`IDEAS_FILE` value, if set, is rooted here.
+3. **In a git repo (no `--main`)** — root = the current worktree root. A `--file`/`IDEAS_FILE` value, if set, is rooted here; otherwise `{worktree-root}/fab/backlog.md` (the default).
+4. **Outside a git repo (no `--main`)** — root = the system config dir (`$XDG_CONFIG_HOME/idea/`, else `~/.config/idea/`). A `--file`/`IDEAS_FILE` value, if set, is rooted here; otherwise the system backlog (the graceful fallback; commands no longer fail with `not in a git repository`).
+
+In all rooted cases an absolute `--file`/`IDEAS_FILE` value is used verbatim.
+
+`--system` and `--main` are mutually exclusive — passing both is a user error and exits non-zero.
 
 ## Commands
 

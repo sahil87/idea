@@ -339,6 +339,13 @@ func render(f *File, today string) (string, int) {
 // is cleaned up on any error path before returning.
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
+	// Create the parent directory on demand so the first mutating write to a
+	// fresh system backlog (e.g. ~/.config/idea/) succeeds instead of failing
+	// with "no such directory". Add already MkdirAll's its own path; this
+	// covers every SaveFile-based mutation (done/reopen/edit/rm/prune/fmt).
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create directories: %w", err)
+	}
 	tmp, err := os.CreateTemp(dir, ".idea-tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
@@ -370,15 +377,105 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 
 // ResolveFilePath determines the backlog file path.
 // Priority: flagValue > IDEAS_FILE env > default (fab/backlog.md).
-// The result is relative to repoRoot.
+// A relative override is resolved against repoRoot; an absolute flagValue /
+// IDEAS_FILE value is honored verbatim (via joinRoot, which short-circuits on
+// an absolute override) so it stays stable regardless of which root resolved.
 func ResolveFilePath(repoRoot, flagValue string) string {
 	if flagValue != "" {
-		return filepath.Join(repoRoot, flagValue)
+		return joinRoot(repoRoot, flagValue)
 	}
 	if env := os.Getenv("IDEAS_FILE"); env != "" {
-		return filepath.Join(repoRoot, env)
+		return joinRoot(repoRoot, env)
 	}
 	return filepath.Join(repoRoot, "fab", "backlog.md")
+}
+
+// joinRoot joins an override path to root unless the override is already
+// absolute, in which case it is returned verbatim. This keeps an absolute
+// --file / IDEAS_FILE value stable regardless of which root resolved.
+func joinRoot(root, override string) string {
+	if filepath.IsAbs(override) {
+		return override
+	}
+	return filepath.Join(root, override)
+}
+
+// SystemBacklogPath returns the system-level backlog file path:
+//
+//	$XDG_CONFIG_HOME/idea/backlog.md  (when XDG_CONFIG_HOME is set)
+//	~/.config/idea/backlog.md         (otherwise)
+//
+// It uses os.UserConfigDir, which already honors XDG_CONFIG_HOME on Unix and
+// falls back to ~/.config — keeping the path resolution stdlib-only.
+func SystemBacklogPath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve system config dir: %w", err)
+	}
+	return filepath.Join(configDir, "idea", "backlog.md"), nil
+}
+
+// ResolveBacklogPath determines the backlog file path from the three persistent
+// flag inputs. systemFlag short-circuits everything; otherwise mainFlag selects
+// which root is used, and fileFlag / IDEAS_FILE (if any) are applied *within*
+// that selected root — so --file and --main are not independent alternatives,
+// they compose. The precedence (first match wins):
+//
+//  1. systemFlag set    → the system backlog (git is skipped entirely).
+//  2. mainFlag set       → root = main worktree root (git-only; errors outside a
+//     repo, unchanged). fileFlag / IDEAS_FILE, if set, are rooted here.
+//  3. inside a git repo  → root = current worktree root. fileFlag / IDEAS_FILE,
+//     if set, are rooted here; otherwise {worktree-root}/fab/backlog.md (the
+//     unchanged default).
+//  4. outside a git repo → root = system config dir. fileFlag / IDEAS_FILE, if
+//     set, are rooted here; otherwise the system backlog (the graceful
+//     fallback).
+//
+// In all rooted cases an absolute fileFlag / IDEAS_FILE value is honored
+// verbatim (see joinRoot).
+//
+// systemFlag and mainFlag are mutually exclusive: both select a root, so passing
+// both is a user error and returns a non-nil error without resolving a path.
+func ResolveBacklogPath(systemFlag, mainFlag bool, fileFlag string) (string, error) {
+	if systemFlag && mainFlag {
+		return "", fmt.Errorf("--system and --main are mutually exclusive; pass only one")
+	}
+
+	// 1. --system forces the system backlog from anywhere, skipping git.
+	if systemFlag {
+		return SystemBacklogPath()
+	}
+
+	// 4/5. The default root is the current worktree when inside a repo; outside
+	// a repo it is the system config dir. --main (when set) overrides this with
+	// the main worktree root and is always git-only.
+	if mainFlag {
+		root, err := MainRepoRoot()
+		if err != nil {
+			return "", err
+		}
+		return ResolveFilePath(root, fileFlag), nil
+	}
+
+	if root, err := WorktreeRoot(); err == nil {
+		// Inside a git repo: unchanged default + override rooting.
+		return ResolveFilePath(root, fileFlag), nil
+	}
+
+	// Outside any git repo: root overrides at the system config dir, and the
+	// no-override default is the system backlog itself.
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve system config dir: %w", err)
+	}
+	ideaConfigDir := filepath.Join(configDir, "idea")
+	if fileFlag != "" {
+		return joinRoot(ideaConfigDir, fileFlag), nil
+	}
+	if env := os.Getenv("IDEAS_FILE"); env != "" {
+		return joinRoot(ideaConfigDir, env), nil
+	}
+	return filepath.Join(ideaConfigDir, "backlog.md"), nil
 }
 
 // FilterKind specifies which ideas to include.

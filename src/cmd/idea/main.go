@@ -11,6 +11,7 @@ import (
 
 var fileFlag string
 var mainFlag bool
+var systemFlag bool
 
 // version is the binary version, overridden via -ldflags "-X main.version=..." at build time.
 var version = "dev"
@@ -48,8 +49,9 @@ Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 		},
 	}
 
-	root.PersistentFlags().StringVar(&fileFlag, "file", "", "Override backlog file path (relative to git root)")
+	root.PersistentFlags().StringVar(&fileFlag, "file", "", "Override backlog file path (relative to the git root, or to the system config dir $XDG_CONFIG_HOME/idea — else ~/.config/idea — when outside a repo)")
 	root.PersistentFlags().BoolVar(&mainFlag, "main", false, "Operate on the main worktree's backlog instead of the current worktree")
+	root.PersistentFlags().BoolVar(&systemFlag, "system", false, "Operate on the system-level backlog ($XDG_CONFIG_HOME/idea/backlog.md, else ~/.config/idea/backlog.md) instead of a repo backlog")
 
 	root.AddCommand(
 		addCmd(),

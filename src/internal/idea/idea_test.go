@@ -3,6 +3,7 @@ package idea
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1702,5 +1703,196 @@ func TestIdeaJSON_MultilineText(t *testing.T) {
 	}
 	if decoded.Text != "first\nsecond" {
 		t.Errorf("decoded text = %q, want %q", decoded.Text, "first\nsecond")
+	}
+}
+
+// --- System Backlog & Resolution Precedence Tests ---
+
+// chdir switches the process working directory to dir for the duration of the
+// test, restoring the original on cleanup. Used instead of testing.T.Chdir so
+// the suite compiles against the module's declared go1.22 (T.Chdir is go1.24+).
+// These tests do not call t.Parallel(), so serial CWD mutation is safe.
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir %s: %v", dir, err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+}
+
+// initGitRepo initializes a real git repo in dir (Constitution V — git behavior
+// is exercised against a real repo, never mocked).
+func initGitRepo(t *testing.T, dir string) {
+	t.Helper()
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.email", "test@test.com"},
+		{"config", "user.name", "Test"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+}
+
+func TestSystemBacklogPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		xdg     string
+		home    string
+		wantSfx string // expected suffix; full path when xdg is set
+	}{
+		{"xdg set", "/custom/cfg", "/home/u", filepath.Join("/custom/cfg", "idea", "backlog.md")},
+		{"xdg unset falls back to home/.config", "", "/home/u", filepath.Join("/home/u", ".config", "idea", "backlog.md")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", tt.xdg)
+			t.Setenv("HOME", tt.home)
+			got, err := SystemBacklogPath()
+			if err != nil {
+				t.Fatalf("SystemBacklogPath: %v", err)
+			}
+			if got != tt.wantSfx {
+				t.Errorf("SystemBacklogPath = %q, want %q", got, tt.wantSfx)
+			}
+		})
+	}
+}
+
+func TestResolveBacklogPath_SystemMainConflict(t *testing.T) {
+	if _, err := ResolveBacklogPath(true, true, ""); err == nil {
+		t.Fatal("expected conflict error for --system + --main, got nil")
+	}
+}
+
+func TestResolveBacklogPath_SystemFlagSkipsGit(t *testing.T) {
+	// Even inside a git repo, --system resolves to the system backlog.
+	repo := t.TempDir()
+	initGitRepo(t, repo)
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	chdir(t, repo)
+
+	got, err := ResolveBacklogPath(true, false, "")
+	if err != nil {
+		t.Fatalf("ResolveBacklogPath: %v", err)
+	}
+	want := filepath.Join(cfg, "idea", "backlog.md")
+	if got != want {
+		t.Errorf("--system in repo = %q, want %q", got, want)
+	}
+}
+
+func TestResolveBacklogPath_InGitDefault(t *testing.T) {
+	repo := t.TempDir()
+	initGitRepo(t, repo)
+	t.Setenv("IDEAS_FILE", "")
+	chdir(t, repo)
+
+	got, err := ResolveBacklogPath(false, false, "")
+	if err != nil {
+		t.Fatalf("ResolveBacklogPath: %v", err)
+	}
+	// macOS /tmp symlinks through /private; compare resolved roots.
+	wantRoot, _ := WorktreeRoot()
+	want := filepath.Join(wantRoot, "fab", "backlog.md")
+	if got != want {
+		t.Errorf("in-git default = %q, want %q", got, want)
+	}
+}
+
+func TestResolveBacklogPath_InGitFileFlag(t *testing.T) {
+	repo := t.TempDir()
+	initGitRepo(t, repo)
+	t.Setenv("IDEAS_FILE", "")
+	chdir(t, repo)
+
+	got, err := ResolveBacklogPath(false, false, "notes/custom.md")
+	if err != nil {
+		t.Fatalf("ResolveBacklogPath: %v", err)
+	}
+	wantRoot, _ := WorktreeRoot()
+	want := filepath.Join(wantRoot, "notes", "custom.md")
+	if got != want {
+		t.Errorf("in-git --file = %q, want %q", got, want)
+	}
+}
+
+func TestResolveBacklogPath_OutOfGitFallback(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("IDEAS_FILE", "")
+	chdir(t, t.TempDir()) // a non-git directory
+
+	got, err := ResolveBacklogPath(false, false, "")
+	if err != nil {
+		t.Fatalf("ResolveBacklogPath: %v", err)
+	}
+	want := filepath.Join(cfg, "idea", "backlog.md")
+	if got != want {
+		t.Errorf("out-of-git fallback = %q, want %q", got, want)
+	}
+}
+
+func TestResolveBacklogPath_OutOfGitFileRootsAtConfigDir(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("IDEAS_FILE", "")
+	chdir(t, t.TempDir())
+
+	got, err := ResolveBacklogPath(false, false, "notes.md")
+	if err != nil {
+		t.Fatalf("ResolveBacklogPath: %v", err)
+	}
+	want := filepath.Join(cfg, "idea", "notes.md")
+	if got != want {
+		t.Errorf("out-of-git --file = %q, want %q", got, want)
+	}
+}
+
+func TestResolveBacklogPath_OutOfGitIdeasEnvRootsAtConfigDir(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("IDEAS_FILE", "env-notes.md")
+	chdir(t, t.TempDir())
+
+	got, err := ResolveBacklogPath(false, false, "")
+	if err != nil {
+		t.Fatalf("ResolveBacklogPath: %v", err)
+	}
+	want := filepath.Join(cfg, "idea", "env-notes.md")
+	if got != want {
+		t.Errorf("out-of-git IDEAS_FILE = %q, want %q", got, want)
+	}
+}
+
+func TestResolveBacklogPath_AbsoluteFileBypassesRoot(t *testing.T) {
+	abs := filepath.Join(t.TempDir(), "abs-backlog.md")
+	t.Setenv("IDEAS_FILE", "")
+
+	// Out of git: absolute --file is used verbatim, not rooted at config dir.
+	chdir(t, t.TempDir())
+	got, err := ResolveBacklogPath(false, false, abs)
+	if err != nil {
+		t.Fatalf("ResolveBacklogPath: %v", err)
+	}
+	if got != abs {
+		t.Errorf("out-of-git absolute --file = %q, want %q", got, abs)
+	}
+}
+
+func TestResolveBacklogPath_MainErrorsOutOfGit(t *testing.T) {
+	t.Setenv("IDEAS_FILE", "")
+	chdir(t, t.TempDir()) // non-git
+
+	if _, err := ResolveBacklogPath(false, true, ""); err == nil {
+		t.Fatal("expected --main to error outside a git repo, got nil")
 	}
 }

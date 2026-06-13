@@ -1,5 +1,5 @@
 ---
-description: "Source tree layout (cmd/idea + internal/idea), root command factory, command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), the TTY/width/color/truncation seam (internal/idea/term.go) + shared printIdeaLines render path, the golang.org/x/term direct dependency, help-dump contract, and version stamping"
+description: "Source tree layout (cmd/idea + internal/idea), root command factory, backlog path resolution precedence (--system / --main / --file, the XDG system backlog ($XDG_CONFIG_HOME/idea/backlog.md, else ~/.config/idea/backlog.md), and the out-of-git graceful fallback), command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), the TTY/width/color/truncation seam (internal/idea/term.go) + shared printIdeaLines render path, the golang.org/x/term direct dependency, help-dump contract, and version stamping"
 ---
 
 # CLI Source Structure
@@ -60,10 +60,54 @@ Rule of thumb:
 
 Two principles in `fab/project/constitution.md` constrain code placement inside this layout:
 
-- **Principle III (Cobra-Idiomatic CLI Surface)** — subcommands are `*cobra.Command` factory functions in `cmd/idea/`; root command exposes the bare-text shorthand (`idea <text>` → `idea add <text>`); persistent flags (`--file`, `--main`) are defined on root.
-- **Principle IV (Logic Lives in `internal/idea`)** — parsing, formatting, ID generation, file I/O, and worktree resolution live in `internal/idea`. `cmd/` files contain only flag wiring, argument validation, and output formatting.
+- **Principle III (Cobra-Idiomatic CLI Surface)** — subcommands are `*cobra.Command` factory functions in `cmd/idea/`; root command exposes the bare-text shorthand (`idea <text>` → `idea add <text>`); persistent flags (`--file`, `--main`, `--system`) are defined on root.
+- **Principle IV (Logic Lives in `internal/idea`)** — parsing, formatting, ID generation, file I/O, worktree resolution, and backlog path resolution live in `internal/idea`. `cmd/` files contain only flag wiring, argument validation, and output formatting. The full path-resolution precedence is owned by `idea.ResolveBacklogPath` (see *Backlog path resolution* below); `resolveFile()` in `cmd/idea/resolve.go` is a one-line forwarder of the three persistent-flag values, holding no precedence logic.
 
 The split forces a testable seam — `internal/idea` is unit-tested directly (table-driven, real temp dirs, no mocks) without spawning subprocesses. `cmd/idea/main_test.go` covers the end-to-end CLI by building the binary under test.
+
+## Backlog path resolution
+
+Which backlog file a command operates on is decided by `idea.ResolveBacklogPath(systemFlag, mainFlag bool, fileFlag string) (string, error)` in `internal/idea/idea.go`. This is the sole owner of the precedence (Constitution IV); `cmd/idea/resolve.go`'s `resolveFile()` only forwards the three persistent-flag values into it. The out-of-git fallback and the system backlog were added by `260613-2b3m-system-level-backlog`, which made `idea` usable outside any git repository — previously every command shelled out to `git rev-parse` and **failed hard** ("not in a git repository") in any non-repo directory, with `--file`/`IDEAS_FILE` unable to rescue it because their values were still joined to the failed git root.
+
+### Three persistent root selectors
+
+Defined on root in `newRootCmd()` (`cmd/idea/main.go`):
+
+| Flag | Var | Effect |
+|------|-----|--------|
+| `--file <path>` / `IDEAS_FILE` env | `fileFlag` | Override the backlog file path; rooted at the git root inside a repo, else at `~/.config/idea` (an absolute value is honored verbatim). |
+| `--main` | `mainFlag` | Operate on the **main worktree's** backlog. Git-only (errors outside a repo) — unchanged by 2b3m. |
+| `--system` | `systemFlag` | Operate on the **system backlog**, from anywhere including inside a repo; skips git entirely. Peer of `--main`, added by 2b3m. |
+
+### Precedence (first match wins)
+
+`ResolveBacklogPath` resolves in this order:
+
+1. **`--system`** → the system backlog (`SystemBacklogPath()`); git is skipped entirely.
+2. **`--main`** → the main worktree root (`MainRepoRoot()`), then `--file`/`IDEAS_FILE` rooting applied via `ResolveFilePath`. Git-only — errors with "not in a git repository" outside a repo (unchanged).
+3. **Inside a git repo, no `--system`/`--main`** → `WorktreeRoot()` succeeds → `ResolveFilePath(worktreeRoot, fileFlag)`: a `--file`/`IDEAS_FILE` override joined to the worktree root, else the **unchanged default** `{worktree-root}/fab/backlog.md`.
+4. **Outside any git repo, no `--system`/`--main`** → `WorktreeRoot()` errors → the **graceful fallback**: a relative `--file`/`IDEAS_FILE` value is joined to `~/.config/idea`, an absolute one is honored verbatim, and with no override the path is the system backlog (`{config-dir}/idea/backlog.md`). Commands no longer fail outside a repo.
+
+**`--system` + `--main` is a hard conflict.** Both select a root; passing both returns `--system and --main are mutually exclusive; pass only one` (non-zero exit via the existing top-level `ERROR:` handler) and resolves no path. The check is the first line of `ResolveBacklogPath`, colocated with the precedence it guards rather than in a separate cobra `PreRunE`.
+
+### System backlog location (XDG)
+
+`SystemBacklogPath() (string, error)` returns `{config-dir}/idea/backlog.md`, where `config-dir` comes from Go stdlib `os.UserConfigDir()` — `$XDG_CONFIG_HOME` when set, else `~/.config` on Unix. So:
+
+- `XDG_CONFIG_HOME=/custom/cfg` → `/custom/cfg/idea/backlog.md`
+- unset, `HOME=/home/u` → `/home/u/.config/idea/backlog.md`
+
+This mirrors `hop`'s `~/.config/hop/hop.yaml` convention and stays stdlib-only — **no new dependency** (Dependency Discipline). `os.UserConfigDir` is the only XDG-resolution path; both `SystemBacklogPath` and the out-of-git override-rooting branch use it.
+
+### On-demand config-dir creation
+
+The system config dir (`~/.config/idea/`) is created lazily on the **first mutating write**, not on read. The `os.MkdirAll(filepath.Dir(path), 0755)` lives at the single SaveFile serialization seam — `atomicWriteFile` — so every SaveFile-based mutation (`done`/`reopen`/`edit`/`rm`/`prune --force`/`fmt`) creates a missing dir before writing; `Add` already MkdirAll's its own path independently. Read-only commands (`list`/`show`) on a non-existent system backlog take the existing "no ideas file yet" path — they neither create the dir nor error.
+
+### Format is path-independent
+
+Only path resolution changed. The backlog file format, ID rules, escaping, canonical write, and all CRUD/`fmt`/`list`/`show`/JSON semantics are byte-for-byte identical regardless of which path resolved (Constitution I) — the system backlog is the same canonical Markdown checklist at a different location. The behavior contract for external consumers is in `../../specs/overview.md` ("Worktree Behavior" + resolution precedence).
+
+**Constitution II scope.** Principle II ("worktree-aware by default, all resolution via `git rev-parse`") still governs the in-git case — git resolution remains the default and the only path used when a repo is present and no override is given. 2b3m added a *sanctioned* non-git path (the system backlog) without amending Principle II; the escape hatch is documented in the spec/overview only, a deliberate non-blocking judgment call left at intake.
 
 ## Backlog line lifecycle (lenient read, canonical write)
 
@@ -202,7 +246,7 @@ This is the single source for the shll.ai command-reference: the `help-dump` sub
 
 ## Root command factory
 
-`cmd/idea/main.go` builds the root command through a `newRootCmd() *cobra.Command` factory rather than inline inside `main()`. The factory constructs root (with `Version: version`, the bare-text shorthand `RunE`, and the `--file`/`--main` persistent flags) and registers every subcommand:
+`cmd/idea/main.go` builds the root command through a `newRootCmd() *cobra.Command` factory rather than inline inside `main()`. The factory constructs root (with `Version: version`, the bare-text shorthand `RunE`, and the `--file`/`--main`/`--system` persistent flags — see *Backlog path resolution* above for what each selects) and registers every subcommand:
 
 ```go
 root.AddCommand(
@@ -217,7 +261,7 @@ The factory exists so the live cobra tree can be constructed in two places off t
 
 ## Command aliases and the bare-text shorthand
 
-`list` is the only subcommand with an alias: `Aliases: []string{"ls"}` in the `listCmd()` command literal (`cmd/idea/list.go`), added by `260610-04rt-add-ls-alias`. `idea ls` is identical to `idea list` in every respect — same flags (`--all/-a`, `--done`, `--json`, `--sort`, `--reverse`), same inherited persistent flags (`--file`, `--main`), same output. The alias is pure routing; the `list` command's behavior and JSON output are unchanged.
+`list` is the only subcommand with an alias: `Aliases: []string{"ls"}` in the `listCmd()` command literal (`cmd/idea/list.go`), added by `260610-04rt-add-ls-alias`. `idea ls` is identical to `idea list` in every respect — same flags (`--all/-a`, `--done`, `--json`, `--sort`, `--reverse`), same inherited persistent flags (`--file`, `--main`, `--system`), same output. The alias is pure routing; the `list` command's behavior and JSON output are unchanged.
 
 **Routing rule (load-bearing).** Cobra resolves subcommand names **and aliases** before the root `RunE` bare-text fallback fires. Two consequences:
 

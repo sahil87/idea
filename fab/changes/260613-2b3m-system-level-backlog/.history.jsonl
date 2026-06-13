@@ -1,0 +1,14 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-13T07:43:29Z"}
+{"args":"Allow idea to work even out of git folders. Use a system level backlog.md to track ideas at a system level","cmd":"fab-new","event":"command","ts":"2026-06-13T07:43:29Z"}
+{"delta":"+1.6","event":"confidence","score":1.6,"trigger":"calc-score","ts":"2026-06-13T07:44:30Z"}
+{"delta":"+0.0","event":"confidence","score":1.6,"trigger":"calc-score","ts":"2026-06-13T07:44:34Z"}
+{"delta":"+1.5","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-06-13T07:45:15Z"}
+{"delta":"+0.0","event":"confidence","score":3.1,"trigger":"calc-score","ts":"2026-06-13T07:45:20Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-06-13T07:46:40Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-06-13T07:46:44Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-06-13T07:54:47Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-06-13T07:59:06Z"}
+{"event":"review","result":"passed","ts":"2026-06-13T07:59:06Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-13T08:01:31Z"}
+{"action":"enter","driver":"git-pr","event":"stage-transition","stage":"review-pr","ts":"2026-06-13T08:02:57Z"}
+{"event":"review","result":"passed","ts":"2026-06-13T08:13:06Z"}
