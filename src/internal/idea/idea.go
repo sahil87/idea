@@ -527,6 +527,19 @@ func RequireSingle(query string, ideas []Idea, filter FilterKind) (Idea, int, er
 		return Idea{}, -1, fmt.Errorf("No idea matching '%s'", query)
 	}
 	if len(matches) > 1 {
+		// Exact-ID precedence: if exactly one matched idea's ID equals the
+		// query (case-insensitive), it wins over incidental substring matches.
+		exactIdx := -1
+		exactCount := 0
+		for j, m := range matches {
+			if strings.EqualFold(m.ID, query) {
+				exactIdx = j
+				exactCount++
+			}
+		}
+		if exactCount == 1 {
+			return matches[exactIdx], indices[exactIdx], nil
+		}
 		var lines []string
 		for _, m := range matches {
 			lines = append(lines, fmt.Sprintf("  %s", FormatLine(m)))

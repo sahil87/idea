@@ -222,6 +222,41 @@ func TestRequireSingle_MultipleMatches(t *testing.T) {
 	}
 }
 
+func TestRequireSingle_ExactIDBeatsSubstring(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		ideas   []Idea
+		wantID  string
+		wantIdx int
+	}{
+		{
+			name:  "exact id wins over substring in another idea's text",
+			query: "jznd",
+			ideas: []Idea{
+				{ID: "jznd", Text: "the idea to edit"},
+				{ID: "qg64", Text: "see related [jznd] for context"},
+			},
+			wantID:  "jznd",
+			wantIdx: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			i, idx, err := RequireSingle(tt.query, tt.ideas, FilterAll)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if i.ID != tt.wantID {
+				t.Errorf("ID = %q, want %q", i.ID, tt.wantID)
+			}
+			if idx != tt.wantIdx {
+				t.Errorf("idx = %d, want %d", idx, tt.wantIdx)
+			}
+		})
+	}
+}
+
 // --- File Operations Tests ---
 
 func writeBacklog(t *testing.T, dir, content string) string {
