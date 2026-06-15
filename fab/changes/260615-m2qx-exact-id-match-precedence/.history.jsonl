@@ -1,0 +1,12 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-15T04:34:29Z"}
+{"args":"Fix: exact-ID match must take precedence over incidental substring matches in RequireSingle (idea resolver). Backlog [m2qx].","cmd":"fab-new","event":"command","ts":"2026-06-15T04:34:29Z"}
+{"delta":"+4.4","event":"confidence","score":4.4,"trigger":"calc-score","ts":"2026-06-15T04:35:19Z"}
+{"delta":"+0.0","event":"confidence","score":4.4,"trigger":"calc-score","ts":"2026-06-15T04:35:24Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-06-15T04:36:15Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-06-15T04:36:26Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-06-15T04:38:49Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-06-15T04:42:13Z"}
+{"event":"review","result":"passed","ts":"2026-06-15T04:42:13Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-15T04:44:31Z"}
+{"action":"enter","driver":"git-pr","event":"stage-transition","stage":"review-pr","ts":"2026-06-15T04:46:06Z"}
+{"event":"review","result":"passed","ts":"2026-06-15T04:50:30Z"}
