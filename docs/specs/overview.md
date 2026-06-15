@@ -63,7 +63,7 @@ In all rooted cases an absolute `--file`/`IDEAS_FILE` value is used verbatim.
 
 Each idea gets a short 4-character lowercase alphanumeric ID (e.g., `[a7k2]`) and an ISO date (`YYYY-MM-DD`). IDs are unique within a single backlog file.
 
-Queries (the `<query>` argument on `show`, `done`, `reopen`, `edit`, `rm`) match against either the ID or the description text. Matching is substring, case-insensitive. If a query matches more than one idea, the command refuses to act and lists the matches.
+Queries (the `<query>` argument on `show`, `done`, `reopen`, `edit`, `rm`) match against either the ID or the description text. Matching is substring, case-insensitive. If a query matches more than one idea, the command refuses to act and lists the matches. An exact (case-insensitive) ID match takes precedence over substring matches: when the query is exactly an idea's ID, that idea is selected outright, so passing the canonical ID always resolves it — even when that ID string also appears as a substring inside another idea's text.
 
 ## Parse & Format Behavior (lenient read, canonical write)
 

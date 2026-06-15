@@ -1,0 +1,12 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-06-15T04:46:52Z"}
+{"args":"m2qx: BUG: single-idea subcommands (show/done/reopen/edit/rm) report Multiple matches when an exact 4-char ID is passed but that ID string also appears as a substring inside another idea's text. Fix: exact (case-insensitive) ID match wins outright, respecting the active FilterKind.","cmd":"fab-new","event":"command","ts":"2026-06-15T04:46:52Z"}
+{"delta":"+2.4","event":"confidence","score":2.4,"trigger":"calc-score","ts":"2026-06-15T04:47:53Z"}
+{"delta":"+0.0","event":"confidence","score":2.4,"trigger":"calc-score","ts":"2026-06-15T04:47:57Z"}
+{"delta":"+1.4","event":"confidence","score":3.8,"trigger":"calc-score","ts":"2026-06-15T04:48:22Z"}
+{"delta":"+0.0","event":"confidence","score":3.8,"trigger":"calc-score","ts":"2026-06-15T04:48:26Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-06-15T04:49:32Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-06-15T04:49:44Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-06-15T04:52:44Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-06-15T04:56:49Z"}
+{"event":"review","result":"passed","ts":"2026-06-15T04:56:49Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-06-15T04:59:18Z"}

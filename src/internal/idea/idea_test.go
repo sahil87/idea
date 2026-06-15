@@ -222,6 +222,161 @@ func TestRequireSingle_MultipleMatches(t *testing.T) {
 	}
 }
 
+// TestRequireSingle_ExactIDPrecedence covers the exact-ID-wins resolution rule:
+// a case-insensitive exact ID match short-circuits the substring search and
+// respects the active FilterKind. Each case constructs ideas in memory
+// (RequireSingle operates on a []Idea slice) and asserts the resolved idea and
+// index, or the error class for fallback cases.
+func TestRequireSingle_ExactIDPrecedence(t *testing.T) {
+	tests := []struct {
+		name string
+		// GIVEN
+		ideas  []Idea
+		query  string
+		filter FilterKind
+		// THEN
+		wantErr     bool
+		wantErrText string // substring expected in err.Error() when wantErr
+		wantID      string // expected resolved ID when no error
+		wantIdx     int    // expected resolved index when no error
+	}{
+		{
+			// GIVEN two open ideas where A's exact ID is a substring of B's text
+			// (the real jznd/qg64/m2qx repro) WHEN querying A's exact ID under
+			// FilterOpen THEN exact-ID precedence resolves A, not "Multiple matches".
+			name: "exact ID is substring of another idea's text resolves the ID owner",
+			ideas: []Idea{
+				{ID: "jznd", Text: "Add dark mode"},
+				{ID: "qg64", Text: "Cross-ref to [jznd] for context"},
+			},
+			query:   "jznd",
+			filter:  FilterOpen,
+			wantID:  "jznd",
+			wantIdx: 0,
+		},
+		{
+			// GIVEN the same repro WHEN querying with a mixed/upper-case ID
+			// THEN the case-insensitive exact-ID path still resolves A.
+			name: "uppercase exact ID query resolves via case-insensitive exact match",
+			ideas: []Idea{
+				{ID: "jznd", Text: "Add dark mode"},
+				{ID: "qg64", Text: "Cross-ref to [jznd] for context"},
+			},
+			query:   "JzNd",
+			filter:  FilterOpen,
+			wantID:  "jznd",
+			wantIdx: 0,
+		},
+		{
+			// GIVEN A's exact ID belongs to a DONE idea, and an open idea's text
+			// contains that ID WHEN querying under FilterOpen THEN the exact-ID
+			// path skips the filtered-out done idea; the open idea's text is not
+			// an exact ID match either, so it falls through to a substring hit.
+			name: "done idea's exact ID is filtered out under FilterOpen",
+			ideas: []Idea{
+				{ID: "jznd", Text: "Add dark mode", Done: true},
+				{ID: "qg64", Text: "Cross-ref to [jznd] for context", Done: false},
+			},
+			query:   "jznd",
+			filter:  FilterOpen,
+			wantID:  "qg64", // falls through to substring match on the open idea
+			wantIdx: 1,
+		},
+		{
+			// GIVEN the same set WHEN querying the done idea's exact ID under
+			// FilterDone THEN exact-ID precedence resolves the done idea.
+			name: "done idea's exact ID resolves under FilterDone",
+			ideas: []Idea{
+				{ID: "jznd", Text: "Add dark mode", Done: true},
+				{ID: "qg64", Text: "Cross-ref to [jznd] for context", Done: false},
+			},
+			query:   "jznd",
+			filter:  FilterDone,
+			wantID:  "jznd",
+			wantIdx: 0,
+		},
+		{
+			// GIVEN the same set WHEN querying the done idea's exact ID under
+			// FilterAll THEN exact-ID precedence resolves it (and ignores the
+			// substring hit in the other idea's text).
+			name: "done idea's exact ID resolves under FilterAll despite substring in another",
+			ideas: []Idea{
+				{ID: "jznd", Text: "Add dark mode", Done: true},
+				{ID: "qg64", Text: "Cross-ref to [jznd] for context", Done: false},
+			},
+			query:   "jznd",
+			filter:  FilterAll,
+			wantID:  "jznd",
+			wantIdx: 0,
+		},
+		{
+			// GIVEN ideas with no exact-ID match WHEN querying a genuine text
+			// substring present in exactly one idea THEN the substring fallback
+			// resolves that single hit (no regression).
+			name: "non-exact-ID substring still resolves a single hit",
+			ideas: []Idea{
+				{ID: "a7k2", Text: "Add dark mode"},
+				{ID: "c3d4", Text: "Fix redirect"},
+			},
+			query:   "dark",
+			filter:  FilterAll,
+			wantID:  "a7k2",
+			wantIdx: 0,
+		},
+		{
+			// GIVEN ideas where a substring query matches more than one idea
+			// (and is not an exact ID) WHEN resolving THEN the fallback still
+			// errors "Multiple matches" (no regression).
+			name: "ambiguous non-exact-ID substring still errors Multiple matches",
+			ideas: []Idea{
+				{ID: "a7k2", Text: "Add dark mode"},
+				{ID: "c3d4", Text: "Add light mode"},
+			},
+			query:       "mode",
+			filter:      FilterAll,
+			wantErr:     true,
+			wantErrText: "Multiple matches",
+		},
+		{
+			// GIVEN ideas where the query matches neither an exact ID nor any
+			// substring WHEN resolving THEN the fallback still errors
+			// "No idea matching" (no regression).
+			name: "zero-hit query still errors No idea matching",
+			ideas: []Idea{
+				{ID: "a7k2", Text: "Add dark mode"},
+			},
+			query:       "nonexistent",
+			filter:      FilterAll,
+			wantErr:     true,
+			wantErrText: "No idea matching",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, idx, err := RequireSingle(tt.query, tt.ideas, tt.filter)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("RequireSingle(%q, filter=%d) = no error, want error containing %q", tt.query, tt.filter, tt.wantErrText)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrText) {
+					t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErrText)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.ID != tt.wantID {
+				t.Errorf("resolved ID = %q, want %q", got.ID, tt.wantID)
+			}
+			if idx != tt.wantIdx {
+				t.Errorf("resolved index = %d, want %d", idx, tt.wantIdx)
+			}
+		})
+	}
+}
+
 // --- File Operations Tests ---
 
 func writeBacklog(t *testing.T, dir, content string) string {

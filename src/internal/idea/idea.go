@@ -511,6 +511,31 @@ func FindAll(query string, ideas []Idea, filter FilterKind) []Idea {
 // RequireSingle finds exactly one matching idea. Returns the idea and its
 // index in the original ideas slice. Errors if 0 or >1 matches.
 func RequireSingle(query string, ideas []Idea, filter FilterKind) (Idea, int, error) {
+	// Exact-ID precedence: a case-insensitive exact ID match wins outright,
+	// before any substring matching. IDs are unique within a backlog
+	// (Constitution VI), so this is unambiguous and lets an idea always be
+	// reached by its own ID even when that ID appears as a substring inside
+	// another idea's text. The active FilterKind is respected so e.g.
+	// `done <id>` (FilterOpen) does not resolve a done idea's exact ID.
+	exactIdx := -1
+	for i, idea := range ideas {
+		if !matchesFilter(idea, filter) {
+			continue
+		}
+		if strings.EqualFold(idea.ID, query) {
+			if exactIdx != -1 {
+				// Defensive: impossible given unique IDs. Fall through to the
+				// substring logic rather than guess which idea to return.
+				exactIdx = -1
+				break
+			}
+			exactIdx = i
+		}
+	}
+	if exactIdx != -1 {
+		return ideas[exactIdx], exactIdx, nil
+	}
+
 	var matches []Idea
 	var indices []int
 	for i, idea := range ideas {
