@@ -1,5 +1,6 @@
 ---
 description: "Pre-merge CI workflow (`ci.yml`): gofmt/vet/test on PRs and push-to-`main`, plus the `ci-gate` stable required status check"
+type: memory
 ---
 
 # CI Pipeline

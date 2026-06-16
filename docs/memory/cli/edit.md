@@ -1,5 +1,6 @@
 ---
 description: "`idea edit` two-form contract: inline replacement (two-arg form) vs. $EDITOR round-trip (`edit <query>`) — editor resolution chain, temp-file mechanics, edge/exit semantics, and the fake-editor test seam"
+type: memory
 ---
 
 # `idea edit` Subcommand
