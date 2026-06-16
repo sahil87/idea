@@ -1787,14 +1787,16 @@ func initGitRepo(t *testing.T, dir string) {
 }
 
 func TestSystemBacklogPath(t *testing.T) {
+	// The system backlog is a constant ~/.config/idea/backlog.md on every
+	// platform. $XDG_CONFIG_HOME is deliberately ignored (see systemConfigDir).
 	tests := []struct {
-		name    string
-		xdg     string
-		home    string
-		wantSfx string // expected suffix; full path when xdg is set
+		name string
+		xdg  string // set to prove it has no effect
+		home string
+		want string
 	}{
-		{"xdg set", "/custom/cfg", "/home/u", filepath.Join("/custom/cfg", "idea", "backlog.md")},
-		{"xdg unset falls back to home/.config", "", "/home/u", filepath.Join("/home/u", ".config", "idea", "backlog.md")},
+		{"home only", "", "/home/u", filepath.Join("/home/u", ".config", "idea", "backlog.md")},
+		{"xdg ignored", "/custom/cfg", "/home/u", filepath.Join("/home/u", ".config", "idea", "backlog.md")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1804,8 +1806,8 @@ func TestSystemBacklogPath(t *testing.T) {
 			if err != nil {
 				t.Fatalf("SystemBacklogPath: %v", err)
 			}
-			if got != tt.wantSfx {
-				t.Errorf("SystemBacklogPath = %q, want %q", got, tt.wantSfx)
+			if got != tt.want {
+				t.Errorf("SystemBacklogPath = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -1818,18 +1820,20 @@ func TestResolveBacklogPath_SystemMainConflict(t *testing.T) {
 }
 
 func TestResolveBacklogPath_SystemFlagSkipsGit(t *testing.T) {
-	// Even inside a git repo, --system resolves to the system backlog.
+	// Even inside a git repo, --system resolves to the system backlog
+	// (~/.config/idea/backlog.md, independent of XDG_CONFIG_HOME).
 	repo := t.TempDir()
 	initGitRepo(t, repo)
-	cfg := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", cfg)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // proven irrelevant
 	chdir(t, repo)
 
 	got, err := ResolveBacklogPath(true, false, "")
 	if err != nil {
 		t.Fatalf("ResolveBacklogPath: %v", err)
 	}
-	want := filepath.Join(cfg, "idea", "backlog.md")
+	want := filepath.Join(home, ".config", "idea", "backlog.md")
 	if got != want {
 		t.Errorf("--system in repo = %q, want %q", got, want)
 	}
@@ -1871,8 +1875,8 @@ func TestResolveBacklogPath_InGitFileFlag(t *testing.T) {
 }
 
 func TestResolveBacklogPath_OutOfGitFallback(t *testing.T) {
-	cfg := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", cfg)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	t.Setenv("IDEAS_FILE", "")
 	chdir(t, t.TempDir()) // a non-git directory
 
@@ -1880,15 +1884,15 @@ func TestResolveBacklogPath_OutOfGitFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveBacklogPath: %v", err)
 	}
-	want := filepath.Join(cfg, "idea", "backlog.md")
+	want := filepath.Join(home, ".config", "idea", "backlog.md")
 	if got != want {
 		t.Errorf("out-of-git fallback = %q, want %q", got, want)
 	}
 }
 
 func TestResolveBacklogPath_OutOfGitFileRootsAtConfigDir(t *testing.T) {
-	cfg := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", cfg)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	t.Setenv("IDEAS_FILE", "")
 	chdir(t, t.TempDir())
 
@@ -1896,15 +1900,15 @@ func TestResolveBacklogPath_OutOfGitFileRootsAtConfigDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveBacklogPath: %v", err)
 	}
-	want := filepath.Join(cfg, "idea", "notes.md")
+	want := filepath.Join(home, ".config", "idea", "notes.md")
 	if got != want {
 		t.Errorf("out-of-git --file = %q, want %q", got, want)
 	}
 }
 
 func TestResolveBacklogPath_OutOfGitIdeasEnvRootsAtConfigDir(t *testing.T) {
-	cfg := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", cfg)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	t.Setenv("IDEAS_FILE", "env-notes.md")
 	chdir(t, t.TempDir())
 
@@ -1912,7 +1916,7 @@ func TestResolveBacklogPath_OutOfGitIdeasEnvRootsAtConfigDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveBacklogPath: %v", err)
 	}
-	want := filepath.Join(cfg, "idea", "env-notes.md")
+	want := filepath.Join(home, ".config", "idea", "env-notes.md")
 	if got != want {
 		t.Errorf("out-of-git IDEAS_FILE = %q, want %q", got, want)
 	}

@@ -1000,18 +1000,20 @@ func TestPrune_ConfirmedDeleteAndAbort(t *testing.T) {
 
 // --- System Backlog & Out-of-Git Operation ---
 
-// systemEnv builds a minimal environment that isolates HOME/XDG_CONFIG_HOME at
-// the given config dir while preserving PATH (git lookups inside the binary
-// need it). Returns the env slice and the resolved system backlog path.
+// systemEnv builds a minimal environment that isolates HOME at a temp dir while
+// preserving PATH (git lookups inside the binary need it). The system backlog
+// is the constant ~/.config/idea/backlog.md, so it resolves under the temp HOME
+// regardless of XDG_CONFIG_HOME (which the binary ignores). Returns the env
+// slice, the idea config dir (~/.config/idea), and the system backlog path.
 func systemEnv(t *testing.T) (env []string, configDir, backlogPath string) {
 	t.Helper()
-	configDir = t.TempDir()
+	home := t.TempDir()
 	env = []string{
-		"HOME=" + configDir,
-		"XDG_CONFIG_HOME=" + configDir,
+		"HOME=" + home,
 		"PATH=" + os.Getenv("PATH"),
 	}
-	backlogPath = filepath.Join(configDir, "idea", "backlog.md")
+	configDir = filepath.Join(home, ".config", "idea")
+	backlogPath = filepath.Join(configDir, "backlog.md")
 	return env, configDir, backlogPath
 }
 
@@ -1097,9 +1099,8 @@ func TestSystem_OnDemandDirCreation(t *testing.T) {
 	env, configDir, backlogPath := systemEnv(t)
 
 	// Precondition: the idea config dir does not exist yet.
-	ideaDir := filepath.Join(configDir, "idea")
-	if _, err := os.Stat(ideaDir); !os.IsNotExist(err) {
-		t.Fatalf("precondition: %s should not exist, stat err=%v", ideaDir, err)
+	if _, err := os.Stat(configDir); !os.IsNotExist(err) {
+		t.Fatalf("precondition: %s should not exist, stat err=%v", configDir, err)
 	}
 
 	if _, stderr, err := runSplitEnv(t, bin, nonGit, env, "add", "first idea"); err != nil {

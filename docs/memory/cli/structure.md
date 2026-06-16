@@ -1,5 +1,5 @@
 ---
-description: "Source tree layout (cmd/idea + internal/idea), root command factory, backlog path resolution precedence (--system / --main / --file, the XDG system backlog ($XDG_CONFIG_HOME/idea/backlog.md, else ~/.config/idea/backlog.md), and the out-of-git graceful fallback), command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), the query-resolution layer (`Match`/`FindAll` pure substring vs. `RequireSingle`'s exact-ID precedence over incidental substring matches), the TTY/width/color/truncation seam (internal/idea/term.go) + shared printIdeaLines render path, the golang.org/x/term direct dependency, help-dump contract, and version stamping"
+description: "Source tree layout (cmd/idea + internal/idea), root command factory, backlog path resolution precedence (--system / --main / --file, the constant system backlog (~/.config/idea/backlog.md on every platform, $XDG_CONFIG_HOME ignored) and the out-of-git graceful fallback), command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), the query-resolution layer (`Match`/`FindAll` pure substring vs. `RequireSingle`'s exact-ID precedence over incidental substring matches), the TTY/width/color/truncation seam (internal/idea/term.go) + shared printIdeaLines render path, the golang.org/x/term direct dependency, help-dump contract, and version stamping"
 ---
 
 # CLI Source Structure
@@ -86,18 +86,23 @@ Defined on root in `newRootCmd()` (`cmd/idea/main.go`):
 1. **`--system`** → the system backlog (`SystemBacklogPath()`); git is skipped entirely.
 2. **`--main`** → the main worktree root (`MainRepoRoot()`), then `--file`/`IDEAS_FILE` rooting applied via `ResolveFilePath`. Git-only — errors with "not in a git repository" outside a repo (unchanged).
 3. **Inside a git repo, no `--system`/`--main`** → `WorktreeRoot()` succeeds → `ResolveFilePath(worktreeRoot, fileFlag)`: a `--file`/`IDEAS_FILE` override joined to the worktree root, else the **unchanged default** `{worktree-root}/fab/backlog.md`.
-4. **Outside any git repo, no `--system`/`--main`** → `WorktreeRoot()` errors → the **graceful fallback**: a relative `--file`/`IDEAS_FILE` value is joined to `~/.config/idea`, an absolute one is honored verbatim, and with no override the path is the system backlog (`{config-dir}/idea/backlog.md`). Commands no longer fail outside a repo.
+4. **Outside any git repo, no `--system`/`--main`** → `WorktreeRoot()` errors → the **graceful fallback**: a relative `--file`/`IDEAS_FILE` value is joined to `~/.config/idea`, an absolute one is honored verbatim, and with no override the path is the system backlog (`~/.config/idea/backlog.md`). Commands no longer fail outside a repo.
 
 **`--system` + `--main` is a hard conflict.** Both select a root; passing both returns `--system and --main are mutually exclusive; pass only one` (non-zero exit via the existing top-level `ERROR:` handler) and resolves no path. The check is the first line of `ResolveBacklogPath`, colocated with the precedence it guards rather than in a separate cobra `PreRunE`.
 
-### System backlog location (XDG)
+### System backlog location (constant `~/.config/idea`)
 
-`SystemBacklogPath() (string, error)` returns `{config-dir}/idea/backlog.md`, where `config-dir` comes from Go stdlib `os.UserConfigDir()` — `$XDG_CONFIG_HOME` when set, else `~/.config` on Unix. So:
+`SystemBacklogPath() (string, error)` returns `~/.config/idea/backlog.md` on **every platform** — a deliberate constant. It delegates to the unexported `systemConfigDir() (string, error)`, which joins `.config/idea` onto `os.UserHomeDir()`. So:
 
-- `XDG_CONFIG_HOME=/custom/cfg` → `/custom/cfg/idea/backlog.md`
-- unset, `HOME=/home/u` → `/home/u/.config/idea/backlog.md`
+- `HOME=/home/u` → `/home/u/.config/idea/backlog.md`
+- macOS `HOME=/Users/u` → `/Users/u/.config/idea/backlog.md`
+- `XDG_CONFIG_HOME=/custom/cfg` → **ignored**; still `~/.config/idea/backlog.md`
 
-This mirrors `hop`'s `~/.config/hop/hop.yaml` convention and stays stdlib-only — **no new dependency** (Dependency Discipline). `os.UserConfigDir` is the only XDG-resolution path; both `SystemBacklogPath` and the out-of-git override-rooting branch use it.
+`$XDG_CONFIG_HOME` is intentionally **not** consulted. The code deliberately avoids `os.UserConfigDir()` — that stdlib helper would resolve to `~/Library/Application Support` on macOS and honor `$XDG_CONFIG_HOME` on Linux, making the path platform-dependent and divergent from the location documented in `--help`. Pinning to `~/.config/idea` keeps the backlog at one predictable place across machines and matches the simplified help text. (The doc string says `~/.config/...`, but the code joins the resolved `os.UserHomeDir()` value — Go's filesystem calls do not expand a literal `~`.)
+
+This stays stdlib-only — **no new dependency** (Dependency Discipline). `systemConfigDir()` is the single resolution path; both `SystemBacklogPath` and the out-of-git override-rooting branch route through it, so they cannot diverge.
+
+> **History**: `260613-2b3m-system-level-backlog` introduced this via `os.UserConfigDir()` (XDG-honoring, macOS `Application Support`). It was later pinned to the constant `~/.config/idea` so the path is identical on every OS and matches the user-facing help text.
 
 ### On-demand config-dir creation
 
