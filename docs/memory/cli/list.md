@@ -1,5 +1,6 @@
 ---
 description: "`idea list`/`ls` rendering contract: TTY-aware rune-safe text truncation, the `--full` flag, the optional `[id...]` positional filter, ANSI color (NO_COLOR-gated), and the pipe contract that keeps piped output canonical"
+type: memory
 ---
 
 # `idea list` / `ls` Subcommand

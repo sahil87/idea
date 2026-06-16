@@ -1,5 +1,6 @@
 ---
 description: "Bulk-remove subcommand (`idea prune`): the TTY × `--force` decision matrix (pipe dry-run vs. interactive `[y/N]` confirm), the leading stderr count header, TTY-aware truncation/color/`--full` listing, stdout/stderr channel split, exit codes, the deliberate non-archival design, and the `removeIdeaAt` seam shared with `Rm`"
+type: memory
 ---
 
 # `idea prune` Subcommand

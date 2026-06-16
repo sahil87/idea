@@ -1,5 +1,6 @@
 ---
 description: "Self-update subcommand (`idea update`): Homebrew-backed upgrade flow, non-brew install fallback hint, and the `--skip-brew-update` flag"
+type: memory
 ---
 
 # `idea update` Subcommand

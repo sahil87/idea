@@ -1,5 +1,6 @@
 ---
 description: "Source tree layout (cmd/idea + internal/idea), root command factory, backlog path resolution precedence (--system / --main / --file, the constant system backlog (~/.config/idea/backlog.md on every platform, $XDG_CONFIG_HOME ignored) and the out-of-git graceful fallback), command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), the query-resolution layer (`Match`/`FindAll` pure substring vs. `RequireSingle`'s exact-ID precedence over incidental substring matches), the TTY/width/color/truncation seam (internal/idea/term.go) + shared printIdeaLines render path, the golang.org/x/term direct dependency, help-dump contract, and version stamping"
+type: memory
 ---
 
 # CLI Source Structure

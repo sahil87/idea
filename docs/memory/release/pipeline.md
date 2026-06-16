@@ -1,5 +1,6 @@
 ---
 description: "Tag-driven release pipeline: release.sh cuts the semver tag; GitHub Actions cross-compiles, publishes the GitHub Release, and updates the Homebrew tap; shll.ai pulls the help-dump JSON on its own schedule"
+type: memory
 ---
 
 # Release Pipeline
