@@ -29,9 +29,8 @@ stdout stays empty; the report (one "adopted:" line per adopted idea plus
 summary counts) goes to stderr. --check writes nothing, prints the same report,
 and exits 1 when the file would change, 0 when it is already canonical. --main
 targets the main worktree's backlog, --system targets the system-level backlog
-($XDG_CONFIG_HOME/idea/backlog.md, else ~/.config/idea/backlog.md), and
---file / IDEAS_FILE point elsewhere (see "idea --help"). Outside a git repo the
-system backlog is used automatically.
+(~/.config/idea/backlog.md), and --file / IDEAS_FILE point elsewhere (see
+"idea --help"). Outside a git repo the system backlog is used automatically.
 
   idea fmt
   idea fmt --check`,
