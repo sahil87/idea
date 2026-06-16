@@ -400,19 +400,28 @@ func joinRoot(root, override string) string {
 	return filepath.Join(root, override)
 }
 
-// SystemBacklogPath returns the system-level backlog file path:
-//
-//	$XDG_CONFIG_HOME/idea/backlog.md  (when XDG_CONFIG_HOME is set)
-//	~/.config/idea/backlog.md         (otherwise)
-//
-// It uses os.UserConfigDir, which already honors XDG_CONFIG_HOME on Unix and
-// falls back to ~/.config — keeping the path resolution stdlib-only.
-func SystemBacklogPath() (string, error) {
-	configDir, err := os.UserConfigDir()
+// systemConfigDir returns the idea system config directory: ~/.config/idea on
+// every platform. This is a deliberate constant — we do NOT use
+// os.UserConfigDir (which would resolve to ~/Library/Application Support on
+// macOS or honor $XDG_CONFIG_HOME on Linux). The system backlog lives at a
+// single, predictable location across machines so the path documented in
+// --help is accurate everywhere. $XDG_CONFIG_HOME is intentionally ignored.
+func systemConfigDir() (string, error) {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve system config dir: %w", err)
+		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
-	return filepath.Join(configDir, "idea", "backlog.md"), nil
+	return filepath.Join(home, ".config", "idea"), nil
+}
+
+// SystemBacklogPath returns the system-level backlog file path,
+// ~/.config/idea/backlog.md on every platform (see systemConfigDir).
+func SystemBacklogPath() (string, error) {
+	dir, err := systemConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "backlog.md"), nil
 }
 
 // ResolveBacklogPath determines the backlog file path from the three persistent
@@ -464,11 +473,10 @@ func ResolveBacklogPath(systemFlag, mainFlag bool, fileFlag string) (string, err
 
 	// Outside any git repo: root overrides at the system config dir, and the
 	// no-override default is the system backlog itself.
-	configDir, err := os.UserConfigDir()
+	ideaConfigDir, err := systemConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve system config dir: %w", err)
+		return "", err
 	}
-	ideaConfigDir := filepath.Join(configDir, "idea")
 	if fileFlag != "" {
 		return joinRoot(ideaConfigDir, fileFlag), nil
 	}
