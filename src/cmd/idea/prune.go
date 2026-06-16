@@ -26,9 +26,9 @@ printing only a count. There is no archive — the backlog is committed, so git
 history is the recovery path. Long idea text is truncated to the terminal width
 (--full shows it in full); piped output is always full and machine-parseable.
 --main targets the main worktree's backlog, --system targets the system-level
-backlog ($XDG_CONFIG_HOME/idea/backlog.md, else ~/.config/idea/backlog.md), and
---file / IDEAS_FILE point elsewhere (see "idea --help"). Outside a git repo the
-system backlog is used automatically.
+backlog (~/.config/idea/backlog.md), and --file / IDEAS_FILE point elsewhere
+(see "idea --help"). Outside a git repo the system backlog is used
+automatically.
 
   idea prune
   idea prune --force`,

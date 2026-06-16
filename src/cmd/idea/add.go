@@ -19,8 +19,7 @@ The idea is appended as a Markdown checklist line with a generated 4-char ID
 and today's date. Use --id and --date to override those generated values
 (handy when importing or backdating). By default the command writes the
 current worktree's backlog; --main targets the main worktree's backlog,
---system targets the system-level backlog ($XDG_CONFIG_HOME/idea/backlog.md,
-else ~/.config/idea/backlog.md), and
+--system targets the system-level backlog (~/.config/idea/backlog.md), and
 --file / IDEAS_FILE point at a different file (see "idea --help"). Outside a
 git repo the system backlog is used automatically.
 

@@ -22,9 +22,9 @@ substring of its text. If it matches more than one idea it is refused and the
 ambiguous matches are listed, so you can be more specific or use the exact ID.
 --json emits the structured record (id, date, status, text) instead of the
 formatted line. --main targets the main worktree's backlog, --system targets
-the system-level backlog ($XDG_CONFIG_HOME/idea/backlog.md, else
-~/.config/idea/backlog.md), and --file / IDEAS_FILE point elsewhere (see
-"idea --help"). Outside a git repo the system backlog is used automatically.
+the system-level backlog (~/.config/idea/backlog.md), and --file / IDEAS_FILE
+point elsewhere (see "idea --help"). Outside a git repo the system backlog is
+used automatically.
 
   idea show a7k2
   idea show "dark mode" --json`,
