@@ -9,8 +9,8 @@ Capture and manage ideas from the command line. A worktree-aware backlog tracker
 ## Why idea?
 
 - **Plain Markdown, not a database** — your backlog is a checked-in `fab/backlog.md` file. Hand-edit it, grep it, diff it, review it in PRs. `idea` is one (canonical) writer of the format; the file is the contract.
-- **Per-repo by default, with a global escape hatch** — every repo has its own backlog, so there's no cross-project noise. When you're not in a repo (or want a personal, cross-cutting list), `idea` falls back to a system-level backlog at `~/.config/idea/backlog.md` — reachable from anywhere with `--system`.
-- **Worktree-aware** — by default `idea` reads/writes the *current* worktree's backlog, so parallel changes don't step on each other. `--main` opts into the shared backlog, and `--system` targets the global one.
+- **Per-repo by default, with a global escape hatch** — every repo has its own backlog, so there's no cross-project noise. When you're not in a repo (or want a personal, cross-cutting list), `idea` falls back to a system-level backlog at `~/.config/idea/backlog.md` — reachable from anywhere with `--system` (`-s`).
+- **Worktree-aware** — by default `idea` reads/writes the *current* worktree's backlog, so parallel changes don't step on each other. `--main` (`-m`) opts into the shared backlog, and `--system` (`-s`) targets the global one.
 - **Short, addressable IDs** — every idea gets a 4-character ID like `[qu1d]` you can type into any command. Queries also match free-text substrings.
 - **Hooks into fab-kit** — `fab/backlog.md` is the same file fab-kit's `/fab-new` reads, so capturing an idea today and starting a change from it tomorrow is one command.
 
@@ -100,13 +100,13 @@ This is the one behavior worth knowing in detail. `idea` resolves the backlog fi
 |---------------|---------------|----------------------------|
 | Main repo | `idea add "..."` | `<main>/fab/backlog.md` |
 | Linked worktree | `idea add "..."` | `<worktree>/fab/backlog.md` (local to this worktree) |
-| Linked worktree | `idea --main add "..."` | `<main>/fab/backlog.md` (shared with the team) |
+| Linked worktree | `idea --main add "..."` (`-m`) | `<main>/fab/backlog.md` (shared with the team) |
 | Outside any git repo | `idea add "..."` | `~/.config/idea/backlog.md` (the system backlog — automatic fallback) |
-| Anywhere | `idea --system add "..."` | `~/.config/idea/backlog.md` (the system backlog, even inside a repo) |
-| Anywhere | `idea --file path/to/file.md ...` | that file (relative to the git root, or to `~/.config/idea` outside a repo; absolute paths as-is) |
+| Anywhere | `idea --system add "..."` (`-s`) | `~/.config/idea/backlog.md` (the system backlog, even inside a repo) |
+| Anywhere | `idea --file path/to/file.md ...` (`-f`) | that file (relative to the git root, or to `~/.config/idea` outside a repo; absolute paths as-is) |
 | Anywhere | `IDEAS_FILE=... idea ...` | the env-var path (same rooting as `--file`) |
 
-Why the default favors the current worktree: when you're heads-down on a change and capture a thought, you usually mean "for *this* branch." `--main` is the explicit opt-in for "add this to the shared roadmap." In the main worktree, `--main` and the default behave identically. `--system` is the opt-in for a personal, cross-repo list — and it's also what you get automatically when you run `idea` outside any git repo, so capture works everywhere. (The system path honors `$XDG_CONFIG_HOME`, defaulting to `~/.config/idea/backlog.md`. `--system` and `--main` are mutually exclusive.)
+Why the default favors the current worktree: when you're heads-down on a change and capture a thought, you usually mean "for *this* branch." `--main` (`-m`) is the explicit opt-in for "add this to the shared roadmap." In the main worktree, `--main` and the default behave identically. `--system` (`-s`) is the opt-in for a personal, cross-repo list — and it's also what you get automatically when you run `idea` outside any git repo, so capture works everywhere. (The system path is always `~/.config/idea/backlog.md` on every platform — `$XDG_CONFIG_HOME` is ignored. `--system` and `--main` are mutually exclusive.)
 
 ## Integration with fab-kit
 
