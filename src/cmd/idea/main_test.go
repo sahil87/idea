@@ -1187,11 +1187,11 @@ func TestTargetFlagShorthands(t *testing.T) {
 					args = append(args, argFile)
 				}
 				// Fix both --id and --date so stdout and the backlog line are
-			// fully deterministic: the add command stamps today's date via
-			// time.Now() by default, which would make the byte-identical
-			// comparisons below flaky if the short and long runs straddled a
-			// midnight boundary.
-			args = append(args, "add", "--id", "ab12", "--date", "2026-01-01", "shared idea")
+				// fully deterministic: the add command stamps today's date via
+				// time.Now() by default, which would make the byte-identical
+				// comparisons below flaky if the short and long runs straddled a
+				// midnight boundary.
+				args = append(args, "add", "--id", "ab12", "--date", "2026-01-01", "shared idea")
 
 				out, stderr, err := runSplitEnv(t, bin, runDir, env, args...)
 				if err != nil {
