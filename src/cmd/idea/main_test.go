@@ -1116,10 +1116,11 @@ func TestSystem_OnDemandDirCreation(t *testing.T) {
 // TestTargetFlagShorthands verifies each single-letter shorthand is equivalent
 // to its long form: -m ≡ --main, -s ≡ --system, -f ≡ --file. For each pair the
 // short and long forms run against independent, isolated setups (fresh repo /
-// fresh HOME) with a fixed --id so output and the resulting backlog are
-// deterministic, then both the stdout confirmation and the targeted backlog
-// file are asserted byte-identical. Table-driven, real temp dirs / real git
-// repos (Constitution V); reuses the existing subprocess seam.
+// fresh HOME) with a fixed --id and --date so output and the resulting backlog
+// are deterministic (the fixed --date also avoids a midnight-boundary flake in
+// the byte-identical comparisons), then both the stdout confirmation and the
+// targeted backlog file are asserted byte-identical. Table-driven, real temp
+// dirs / real git repos (Constitution V); reuses the existing subprocess seam.
 //
 // Each case is set up so the flag's target diverges from the run directory's
 // default backlog, so a mis-wired shorthand that silently fell through to the
@@ -1185,7 +1186,12 @@ func TestTargetFlagShorthands(t *testing.T) {
 				if argFile != "" {
 					args = append(args, argFile)
 				}
-				args = append(args, "add", "--id", "ab12", "shared idea")
+				// Fix both --id and --date so stdout and the backlog line are
+			// fully deterministic: the add command stamps today's date via
+			// time.Now() by default, which would make the byte-identical
+			// comparisons below flaky if the short and long runs straddled a
+			// midnight boundary.
+			args = append(args, "add", "--id", "ab12", "--date", "2026-01-01", "shared idea")
 
 				out, stderr, err := runSplitEnv(t, bin, runDir, env, args...)
 				if err != nil {
