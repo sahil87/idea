@@ -1110,3 +1110,146 @@ func TestSystem_OnDemandDirCreation(t *testing.T) {
 		t.Fatalf("system backlog not created on first write: %v", err)
 	}
 }
+
+// --- Target flag shorthands (-m/-s/-f) ---
+
+// TestTargetFlagShorthands verifies each single-letter shorthand is equivalent
+// to its long form: -m ≡ --main, -s ≡ --system, -f ≡ --file. For each pair the
+// short and long forms run against independent, isolated setups (fresh repo /
+// fresh HOME) with a fixed --id and --date so output and the resulting backlog
+// are deterministic (the fixed --date also avoids a midnight-boundary flake in
+// the byte-identical comparisons), then both the stdout confirmation and the
+// targeted backlog file are asserted byte-identical. Table-driven, real temp
+// dirs / real git repos (Constitution V); reuses the existing subprocess seam.
+//
+// Each case is set up so the flag's target diverges from the run directory's
+// default backlog, so a mis-wired shorthand that silently fell through to the
+// default path would be detectable (not masked by the two paths coinciding):
+//   - --main runs from a *linked worktree* (git worktree add), where the main
+//     worktree's backlog differs from the linked worktree's own default (R1's
+//     GIVEN). A mis-wired -m would write the linked worktree's backlog.
+//   - --system runs *inside a git repo* (mirroring TestSystem_FlagInsideRepo),
+//     where the system backlog differs from the repo's default backlog. A
+//     mis-wired -s would write the repo backlog.
+//   - --file names a custom path distinct from the repo default.
+func TestTargetFlagShorthands(t *testing.T) {
+	bin := buildBinary(t)
+
+	tests := []struct {
+		name  string
+		short string // shorthand flag, e.g. "-m"
+		long  string // long flag, e.g. "--main"
+	}{
+		{name: "-m equals --main", short: "-m", long: "--main"},
+		{name: "-s equals --system", short: "-s", long: "--system"},
+		{name: "-f equals --file", short: "-f", long: "--file"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// addWith performs one add against an isolated setup using the given
+			// target flag form, returning the stdout confirmation and the
+			// resulting backlog file content. Each case's run directory differs
+			// from the flag's target so the flag genuinely diverges from the
+			// default path (see the function doc).
+			addWith := func(flagForm string) (stdout, backlog string) {
+				t.Helper()
+				var (
+					runDir  string // directory the command runs from
+					env     []string
+					target  string
+					argFile string // extra positional for --file/-f
+				)
+				switch tt.long {
+				case "--main":
+					// Run from a linked worktree so --main (the main worktree's
+					// backlog) diverges from the linked worktree's own default.
+					mainRepo := setupGitRepo(t)
+					runDir = filepath.Join(t.TempDir(), "linked")
+					run(t, mainRepo, "git", "commit", "--allow-empty", "-m", "seed")
+					run(t, mainRepo, "git", "worktree", "add", runDir)
+					target = filepath.Join(mainRepo, "fab", "backlog.md")
+				case "--system":
+					// Run inside a repo so --system (the system backlog)
+					// diverges from the repo's own default backlog.
+					runDir = setupGitRepo(t)
+					var backlogPath string
+					env, _, backlogPath = systemEnv(t)
+					target = backlogPath
+				case "--file":
+					runDir = setupGitRepo(t)
+					argFile = filepath.Join(runDir, "custom.md")
+					target = argFile
+				}
+
+				args := []string{flagForm}
+				if argFile != "" {
+					args = append(args, argFile)
+				}
+				// Fix both --id and --date so stdout and the backlog line are
+				// fully deterministic: the add command stamps today's date via
+				// time.Now() by default, which would make the byte-identical
+				// comparisons below flaky if the short and long runs straddled a
+				// midnight boundary.
+				args = append(args, "add", "--id", "ab12", "--date", "2026-01-01", "shared idea")
+
+				out, stderr, err := runSplitEnv(t, bin, runDir, env, args...)
+				if err != nil {
+					t.Fatalf("%s add failed: %v\nstdout=%q stderr=%q", flagForm, err, out, stderr)
+				}
+				b, readErr := os.ReadFile(target)
+				if readErr != nil {
+					t.Fatalf("%s: backlog not written at %s: %v", flagForm, target, readErr)
+				}
+				return out, string(b)
+			}
+
+			shortOut, shortBacklog := addWith(tt.short)
+			longOut, longBacklog := addWith(tt.long)
+
+			if shortOut != longOut {
+				t.Errorf("stdout mismatch:\n%s: %q\n%s: %q", tt.short, shortOut, tt.long, longOut)
+			}
+			if shortBacklog != longBacklog {
+				t.Errorf("backlog mismatch:\n%s:\n%s\n%s:\n%s", tt.short, shortBacklog, tt.long, longBacklog)
+			}
+			if !strings.Contains(shortBacklog, "shared idea") {
+				t.Errorf("%s backlog missing idea, got: %q", tt.short, shortBacklog)
+			}
+		})
+	}
+}
+
+// TestTargetFlagShorthands_ConflictWithShortForms verifies the --system/--main
+// conflict holds regardless of which long/short mix selects the two roots
+// (R4's WHEN: "-s -m ... or any long/short mix") — each exits non-zero with the
+// mutually-exclusive message. Enforcement stays in ResolveBacklogPath; no cobra
+// MarkFlagsMutuallyExclusive was added. Mirrors TestSystem_ConflictWithMain
+// using the short and mixed forms.
+func TestTargetFlagShorthands_ConflictWithShortForms(t *testing.T) {
+	bin := buildBinary(t)
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "both short", args: []string{"-s", "-m", "x"}},
+		{name: "short system, long main", args: []string{"-s", "--main", "x"}},
+		{name: "long system, short main", args: []string{"--system", "-m", "x"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			env, _, _ := systemEnv(t)
+
+			stdout, stderr, err := runSplitEnv(t, bin, repo, env, tt.args...)
+			if err == nil {
+				t.Fatalf("expected non-zero exit for %v, got success\nstdout=%q", tt.args, stdout)
+			}
+			if !strings.Contains(stderr, "mutually exclusive") {
+				t.Errorf("expected conflict message on stderr, got: %q", stderr)
+			}
+		})
+	}
+}

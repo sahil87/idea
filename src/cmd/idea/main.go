@@ -28,7 +28,15 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "idea [text]",
 		Short: "Backlog idea management (current worktree; use --main for main worktree)",
-		Long: `Backlog idea management (current worktree; use --main for main worktree).
+		Long: `Backlog idea management for the command line.
+
+Targets (which backlog a command operates on):
+  (default)      current worktree's backlog
+  -m, --main     main worktree's backlog (shared)
+  -s, --system   ~/.config/idea/backlog.md (cross-repo; also the default outside a repo)
+
+--main and --system are mutually exclusive. --file/-f overrides the backlog
+path within the selected root (ignored with --system).
 
 Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 		Version:       version,
@@ -49,9 +57,9 @@ Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 		},
 	}
 
-	root.PersistentFlags().StringVar(&fileFlag, "file", "", "Override backlog file path (relative to the git root, or to ~/.config/idea when outside a repo)")
-	root.PersistentFlags().BoolVar(&mainFlag, "main", false, "Operate on the main worktree's backlog instead of the current worktree")
-	root.PersistentFlags().BoolVar(&systemFlag, "system", false, "Operate on the system-level backlog (~/.config/idea/backlog.md) instead of a repo backlog")
+	root.PersistentFlags().StringVarP(&fileFlag, "file", "f", "", "Override backlog file path (relative to the git root, or to ~/.config/idea when outside a repo)")
+	root.PersistentFlags().BoolVarP(&mainFlag, "main", "m", false, "Operate on the main worktree's backlog instead of the current worktree")
+	root.PersistentFlags().BoolVarP(&systemFlag, "system", "s", false, "Operate on the system-level backlog (~/.config/idea/backlog.md) instead of a repo backlog")
 
 	root.AddCommand(
 		addCmd(),

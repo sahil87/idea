@@ -1,5 +1,5 @@
 ---
-description: "Source tree layout (cmd/idea + internal/idea), root command factory, backlog path resolution precedence (--system / --main / --file, the constant system backlog (~/.config/idea/backlog.md on every platform, $XDG_CONFIG_HOME ignored) and the out-of-git graceful fallback), command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), the query-resolution layer (`Match`/`FindAll` pure substring vs. `RequireSingle`'s exact-ID precedence over incidental substring matches), the TTY/width/color/truncation seam (internal/idea/term.go) + shared printIdeaLines render path, the golang.org/x/term direct dependency, help-dump contract, and version stamping"
+description: "Source tree layout (cmd/idea + internal/idea), root command factory + Targets-first root Long help, backlog path resolution precedence (the -s/--system, -m/--main, -f/--file persistent selectors with their single-letter shorthands, the constant system backlog (~/.config/idea/backlog.md on every platform, $XDG_CONFIG_HOME ignored) and the out-of-git graceful fallback), command aliases vs. the bare-text shorthand, backlog line lifecycle (lenient read / canonical write incl. the escaped-text convention for multiline ideas and the explicit `idea fmt` canonicalizer with bare-checkbox adoption), the query-resolution layer (`Match`/`FindAll` pure substring vs. `RequireSingle`'s exact-ID precedence over incidental substring matches), the TTY/width/color/truncation seam (internal/idea/term.go) + shared printIdeaLines render path, the golang.org/x/term direct dependency, help-dump contract, and version stamping"
 type: memory
 ---
 
@@ -61,7 +61,7 @@ Rule of thumb:
 
 Two principles in `fab/project/constitution.md` constrain code placement inside this layout:
 
-- **Principle III (Cobra-Idiomatic CLI Surface)** — subcommands are `*cobra.Command` factory functions in `cmd/idea/`; root command exposes the bare-text shorthand (`idea <text>` → `idea add <text>`); persistent flags (`--file`, `--main`, `--system`) are defined on root.
+- **Principle III (Cobra-Idiomatic CLI Surface)** — subcommands are `*cobra.Command` factory functions in `cmd/idea/`; root command exposes the bare-text shorthand (`idea <text>` → `idea add <text>`); persistent flags (`-f`/`--file`, `-m`/`--main`, `-s`/`--system`) are defined on root and inherited by every subcommand.
 - **Principle IV (Logic Lives in `internal/idea`)** — parsing, formatting, ID generation, file I/O, worktree resolution, and backlog path resolution live in `internal/idea`. `cmd/` files contain only flag wiring, argument validation, and output formatting. The full path-resolution precedence is owned by `idea.ResolveBacklogPath` (see *Backlog path resolution* below); `resolveFile()` in `cmd/idea/resolve.go` is a one-line forwarder of the three persistent-flag values, holding no precedence logic.
 
 The split forces a testable seam — `internal/idea` is unit-tested directly (table-driven, real temp dirs, no mocks) without spawning subprocesses. `cmd/idea/main_test.go` covers the end-to-end CLI by building the binary under test.
@@ -74,11 +74,13 @@ Which backlog file a command operates on is decided by `idea.ResolveBacklogPath(
 
 Defined on root in `newRootCmd()` (`cmd/idea/main.go`):
 
+All three carry a single-letter shorthand (added by `260705-ncbf-target-flag-shorthands-help` via `StringVarP`/`BoolVarP`, usage strings byte-unchanged): `-f`/`-m`/`-s`. The shorthands are persistent, so every subcommand inherits them (no collision — the only pre-existing shorthands were cobra's `-h`/`-v` and the list-local `-a`).
+
 | Flag | Var | Effect |
 |------|-----|--------|
-| `--file <path>` / `IDEAS_FILE` env | `fileFlag` | Override the backlog file path; rooted at the git root inside a repo, else at `~/.config/idea` (an absolute value is honored verbatim). |
-| `--main` | `mainFlag` | Operate on the **main worktree's** backlog. Git-only (errors outside a repo) — unchanged by 2b3m. |
-| `--system` | `systemFlag` | Operate on the **system backlog**, from anywhere including inside a repo; skips git entirely. Peer of `--main`, added by 2b3m. |
+| `-f, --file <path>` / `IDEAS_FILE` env | `fileFlag` | Override the backlog file path; rooted at the git root inside a repo, else at `~/.config/idea` (an absolute value is honored verbatim). Ignored under `--system` (which short-circuits before consulting `fileFlag`). |
+| `-m, --main` | `mainFlag` | Operate on the **main worktree's** backlog. Git-only (errors outside a repo) — unchanged by 2b3m. |
+| `-s, --system` | `systemFlag` | Operate on the **system backlog**, from anywhere including inside a repo; skips git entirely. Peer of `--main`, added by 2b3m. |
 
 ### Precedence (first match wins)
 
@@ -256,13 +258,13 @@ Internal helpers: `truncateText(text string, avail int)` (rune-safe `[]rune` cli
 
 ## Command help text (`Short` vs `Long`)
 
-Every subcommand sets an enriched cobra `Long` describing what it does, its key flags, the worktree-vs-`--main` resolution (for backlog-touching commands), and a short example. `Short` stays the terse one-liner used by the `Available Commands` sidebar and the `idea -h` root listing — it is a public, byte-stable string; depth goes in `Long` only. The convention was applied repo-wide by `260602-s73u-enrich-command-long-help` (the 8 backlog/update commands; `main.go` / `shell_init.go` already carried `Long`).
+Every subcommand sets an enriched cobra `Long` describing what it does, its key flags, the worktree-vs-`--main` resolution (for backlog-touching commands), and a short example. `Short` stays the terse one-liner used by the `Available Commands` sidebar and the `idea -h` root listing — it is a public, byte-stable string; depth goes in `Long` only. The convention was applied repo-wide by `260602-s73u-enrich-command-long-help` (the 8 backlog/update commands; `main.go` / `shell_init.go` already carried `Long`). The **root** `Long` was later restructured Targets-first by `260705-ncbf-target-flag-shorthands-help` (see *Root command factory* above), keeping `Short` byte-stable — so the `help-dump` `text` re-renders automatically (no schema change) with the new Targets block and the `-f`/`-m`/`-s` shorthand column cobra now prints in the `Flags:` block.
 
 This is the single source for the shll.ai command-reference: the `help-dump` subcommand captures each command's `Long` + `UsageString` as the reference node's `text` (see the `help-dump` subcommand below), so the prose is written once in the binary and never drifts from the site. shll.ai pulls that JSON by running `idea help-dump` on its own schedule — `idea`'s release no longer pushes it (see `../release/pipeline.md`). New subcommands SHOULD carry a `Long` (raw backtick string, short paragraphs, inline example) rather than `Short`-only — there is no CI signal enforcing it.
 
 ## Root command factory
 
-`cmd/idea/main.go` builds the root command through a `newRootCmd() *cobra.Command` factory rather than inline inside `main()`. The factory constructs root (with `Version: version`, the bare-text shorthand `RunE`, and the `--file`/`--main`/`--system` persistent flags — see *Backlog path resolution* above for what each selects) and registers every subcommand:
+`cmd/idea/main.go` builds the root command through a `newRootCmd() *cobra.Command` factory rather than inline inside `main()`. The factory constructs root (with `Version: version`, the bare-text shorthand `RunE`, and the `-f`/`--file`, `-m`/`--main`, `-s`/`--system` persistent flags — registered via `StringVarP`/`BoolVarP`, see *Backlog path resolution* above for what each selects) and registers every subcommand:
 
 ```go
 root.AddCommand(
@@ -274,6 +276,8 @@ root.AddCommand(
 `main()` is then a four-line wrapper: `newRootCmd().Execute()` with the existing `errSilent` sentinel handling (`errors.Is(err, errSilent)` skips the `ERROR:` line) and `os.Exit(1)` on error.
 
 The factory exists so the live cobra tree can be constructed in two places off the same definition: `main()` for the running binary, and `help_dump.go`'s `buildNode(cmd.Root())`, which serializes that identical tree (see below). It is also the entry point every in-process test uses — `newRootCmd()` with `SetOut(&bytes.Buffer{})` + `SetArgs(...)` exercises the full CLI without building a binary or spawning a subprocess.
+
+**Targets-first root `Long`.** The root `Long` (rewritten by `260705-ncbf-target-flag-shorthands-help`) leads with a `Targets (which backlog a command operates on):` block — three rows: `(default)` current worktree, `-m, --main` main worktree, `-s, --system` rendered with the literal `~/.config/idea/backlog.md` (per *System backlog location* above; the README's `$XDG_CONFIG_HOME` claim is not imported). It then states `--main` and `--system` are mutually exclusive, notes `--file`/`-f` overrides the path within the selected root **(ignored with `--system`** — because `ResolveBacklogPath` short-circuits to `SystemBacklogPath()` before consulting `fileFlag`, per the precedence above), and retains the bare-text shorthand line (`Shorthand: "idea <text>" is equivalent to "idea add <text>".`). `Short` is byte-unchanged. The help is now the canonical statement of the mutual exclusion (previously only in the README; runtime enforcement stays in `ResolveBacklogPath`).
 
 ## Command aliases and the bare-text shorthand
 

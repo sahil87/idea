@@ -1,0 +1,19 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-07-05T18:28:33Z"}
+{"args":"Add -m/-s single-letter shorthands for --main/--system root persistent flags and restructure root Long help around the three backlog-targeting modes","cmd":"fab-new","event":"command","ts":"2026-07-05T18:28:33Z"}
+{"delta":"+4.4","event":"confidence","score":4.4,"trigger":"calc-score","ts":"2026-07-05T18:30:15Z"}
+{"cmd":"fab-switch","event":"command","ts":"2026-07-05T18:31:22Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-07-05T18:32:36Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-07-05T18:33:03Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-07-05T18:38:06Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-07-05T18:38:58Z"}
+{"event":"review","result":"failed","ts":"2026-07-05T18:48:24Z"}
+{"action":"re-entry","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-07-05T18:48:24Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-07-05T18:50:39Z"}
+{"action":"re-entry","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-07-05T18:56:23Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-07-05T19:01:55Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-07-05T19:11:19Z"}
+{"event":"review","result":"passed","ts":"2026-07-05T19:11:19Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-07-05T19:11:50Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-07-05T19:13:50Z"}
+{"action":"enter","driver":"git-pr","event":"stage-transition","stage":"review-pr","ts":"2026-07-05T19:15:08Z"}
+{"event":"review","result":"passed","ts":"2026-07-05T19:21:32Z"}
