@@ -6,6 +6,18 @@
 
 Capture and manage ideas from the command line. A worktree-aware backlog tracker that keeps `fab/backlog.md` as the source of truth — plain Markdown, queryable from the CLI, shareable with the rest of your team via git.
 
+## Install
+
+```sh
+curl -fsSL https://shll.ai/install | sh -s -- idea
+```
+
+Installs idea (plus the shll meta-CLI) via Homebrew, handling tap trust automatically. To install the entire sahil87 toolkit instead:
+
+```sh
+curl -fsSL https://shll.ai/install | sh
+```
+
 ## Why idea?
 
 - **Plain Markdown, not a database** — your backlog is a checked-in `fab/backlog.md` file. Hand-edit it, grep it, diff it, review it in PRs. `idea` is one (canonical) writer of the format; the file is the contract.
@@ -14,15 +26,9 @@ Capture and manage ideas from the command line. A worktree-aware backlog tracker
 - **Short, addressable IDs** — every idea gets a 4-character ID like `[qu1d]` you can type into any command. Queries also match free-text substrings.
 - **Hooks into fab-kit** — `fab/backlog.md` is the same file fab-kit's `/fab-new` reads, so capturing an idea today and starting a change from it tomorrow is one command.
 
-## Install
+## Other ways to install
 
-Homebrew tap:
-
-```bash
-brew install sahil87/tap/idea
-```
-
-Or build and install manually from a clean checkout (requires Go and `just`):
+Build and install manually from a clean checkout (requires Go and `just`):
 
 ```bash
 just local-install
