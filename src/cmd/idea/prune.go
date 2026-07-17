@@ -11,27 +11,27 @@ import (
 )
 
 func pruneCmd() *cobra.Command {
-	var force, full bool
+	var force, yes, full bool
 
 	cmd := &cobra.Command{
 		Use:   "prune",
 		Short: "Bulk-remove all done ideas from the backlog",
 		Long: `Bulk-remove all done ([x]) ideas from the current worktree's backlog.
 
-Without --force this lists each done idea that would be removed. On a terminal
+Without consent this lists each done idea that would be removed. On a terminal
 it then prompts for confirmation ([y/N]) and deletes only if you confirm; when
 the output is piped it stays a free dry run (removable lines on stdout, a hint
-on stderr) and never prompts. --force skips the prompt and deletes immediately,
-printing only a count. There is no archive — the backlog is committed, so git
-history is the recovery path. Long idea text is truncated to the terminal width
-(--full shows it in full); piped output is always full and machine-parseable.
---main targets the main worktree's backlog, --system targets the system-level
-backlog (~/.config/idea/backlog.md), and --file / IDEAS_FILE point elsewhere
-(see "idea --help"). Outside a git repo the system backlog is used
-automatically.
+on stderr) and never prompts. --yes/-y (or the equivalent --force) skips the
+prompt and deletes immediately, printing only a count. There is no archive —
+the backlog is committed, so git history is the recovery path. Long idea text is
+truncated to the terminal width (--full shows it in full); piped output is
+always full and machine-parseable. --main targets the main worktree's backlog,
+--system targets the system-level backlog (~/.config/idea/backlog.md), and
+--file / IDEAS_FILE point elsewhere (see "idea --help"). Outside a git repo the
+system backlog is used automatically.
 
   idea prune
-  idea prune --force`,
+  idea prune --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
@@ -39,7 +39,10 @@ automatically.
 				return err
 			}
 
-			pruned, backfilled, err := idea.Prune(path, force)
+			// --yes/-y and --force are equivalent consent (additive alias).
+			consent := force || yes
+
+			pruned, backfilled, err := idea.Prune(path, consent)
 			if err != nil {
 				return err
 			}
@@ -49,7 +52,7 @@ automatically.
 				return nil
 			}
 
-			if force {
+			if consent {
 				printBackfillNotice(cmd, backfilled)
 				fmt.Printf("Pruned %d done idea(s).\n", len(pruned))
 				return nil
@@ -66,7 +69,7 @@ automatically.
 			// would hang). On a TTY the prompt replaces the trailing hint; on a
 			// pipe we fall back to the classic dry run with the trailing hint.
 			if !idea.IsTTY(os.Stdout) {
-				fmt.Fprintln(cmd.ErrOrStderr(), "Re-run with --force to confirm.")
+				fmt.Fprintln(cmd.ErrOrStderr(), "Re-run with --yes (or --force) to confirm.")
 				return nil
 			}
 
@@ -88,7 +91,8 @@ automatically.
 		},
 	}
 
-	cmd.Flags().BoolVar(&force, "force", false, "Confirm deletion of all done ideas")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Confirm deletion of all done ideas (non-interactive consent)")
+	cmd.Flags().BoolVar(&force, "force", false, "Confirm deletion of all done ideas (alias of --yes)")
 	cmd.Flags().BoolVar(&full, "full", false, "Show full idea text on a terminal (no truncation)")
 
 	return cmd

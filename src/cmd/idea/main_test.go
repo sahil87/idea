@@ -413,7 +413,7 @@ func TestPrune_CLIOutputContract(t *testing.T) {
 			wantStdout: "- [x] [d0ne] 2026-06-02: prune me\n- [x] [d1ne] 2026-06-03: prune me too\n",
 			// Non-TTY (piped) path: the leading count header (feature B) plus
 			// the classic trailing fallback hint, in that order.
-			wantStderr: "2 done idea(s) would be pruned\nRe-run with --force to confirm.\n",
+			wantStderr: "2 done idea(s) would be pruned\nRe-run with --yes (or --force) to confirm.\n",
 		},
 		{
 			name:        "force prints count only and removes the done lines",
@@ -852,7 +852,7 @@ func TestPrune_CountHeaderAndDecisionMatrix(t *testing.T) {
 			name:       "non-tty no-force: header + lines on stdout + fallback hint, no prompt",
 			args:       []string{"prune"},
 			wantStdout: "- [x] [d0ne] 2026-06-02: prune me\n- [x] [d1ne] 2026-06-03: prune me too\n",
-			wantStderr: []string{"2 done idea(s) would be pruned", "Re-run with --force to confirm."},
+			wantStderr: []string{"2 done idea(s) would be pruned", "Re-run with --yes (or --force) to confirm."},
 			noStderr:   []string{"[y/N]"},
 		},
 		{
@@ -1249,6 +1249,118 @@ func TestTargetFlagShorthands_ConflictWithShortForms(t *testing.T) {
 			}
 			if !strings.Contains(stderr, "mutually exclusive") {
 				t.Errorf("expected conflict message on stderr, got: %q", stderr)
+			}
+		})
+	}
+}
+
+// TestRmPruneConsent_CLI covers the additive consent flags (--yes/-y as an alias
+// of --force) on rm and prune, and rm --dry-run's non-destructive preview.
+// Subprocess table against a real git repo (Constitution V), reusing the shared
+// buildBinary/setupGitRepo/writeRepoBacklog/readRepoBacklog/runSplit helpers.
+func TestRmPruneConsent_CLI(t *testing.T) {
+	bin := buildBinary(t)
+
+	const seed = `# Backlog
+
+- [ ] [aaaa] 2026-01-01: first open idea
+- [x] [bbbb] 2026-01-02: a done idea
+- [ ] [cccc] 2026-01-03: second open idea
+- [x] [dddd] 2026-01-04: another done idea
+`
+
+	tests := []struct {
+		name string
+		args []string
+		// gone: IDs that must be absent from the backlog after the run.
+		gone []string
+		// kept: IDs that must still be present after the run.
+		kept []string
+		// unchanged: when true, the backlog must be byte-identical to the seed.
+		unchanged bool
+		// stdoutHas: substrings required on stdout.
+		stdoutHas []string
+	}{
+		{
+			name:      "rm --yes deletes like --force",
+			args:      []string{"rm", "aaaa", "--yes"},
+			gone:      []string{"aaaa"},
+			kept:      []string{"bbbb", "cccc", "dddd"},
+			stdoutHas: []string{"Removed:", "aaaa"},
+		},
+		{
+			name:      "rm -y deletes like --force",
+			args:      []string{"rm", "cccc", "-y"},
+			gone:      []string{"cccc"},
+			kept:      []string{"aaaa", "bbbb", "dddd"},
+			stdoutHas: []string{"Removed:", "cccc"},
+		},
+		{
+			name:      "rm --force still deletes (retained alias)",
+			args:      []string{"rm", "aaaa", "--force"},
+			gone:      []string{"aaaa"},
+			kept:      []string{"bbbb", "cccc", "dddd"},
+			stdoutHas: []string{"Removed:", "aaaa"},
+		},
+		{
+			name:      "rm --dry-run previews and writes nothing",
+			args:      []string{"rm", "aaaa", "--dry-run"},
+			unchanged: true,
+			stdoutHas: []string{"aaaa", "first open idea"},
+		},
+		{
+			name:      "rm --dry-run wins over --yes (no delete)",
+			args:      []string{"rm", "aaaa", "--dry-run", "--yes"},
+			unchanged: true,
+			stdoutHas: []string{"aaaa"},
+		},
+		{
+			name:      "prune --yes prunes like --force",
+			args:      []string{"prune", "--yes"},
+			gone:      []string{"bbbb", "dddd"},
+			kept:      []string{"aaaa", "cccc"},
+			stdoutHas: []string{"Pruned 2 done idea(s)."},
+		},
+		{
+			name:      "prune -y prunes like --force",
+			args:      []string{"prune", "-y"},
+			gone:      []string{"bbbb", "dddd"},
+			kept:      []string{"aaaa", "cccc"},
+			stdoutHas: []string{"Pruned 2 done idea(s)."},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			writeRepoBacklog(t, repo, seed)
+
+			stdout, stderr, err := runSplit(t, bin, repo, tt.args...)
+			if err != nil {
+				t.Fatalf("%v failed: %v\nstdout=%q stderr=%q", tt.args, err, stdout, stderr)
+			}
+
+			for _, want := range tt.stdoutHas {
+				if !strings.Contains(stdout, want) {
+					t.Errorf("stdout missing %q; got:\n%s", want, stdout)
+				}
+			}
+
+			got := readRepoBacklog(t, repo)
+			if tt.unchanged {
+				if got != seed {
+					t.Errorf("backlog must be byte-identical after %v; got:\n%s", tt.args, got)
+				}
+			}
+			for _, id := range tt.gone {
+				if strings.Contains(got, id) {
+					t.Errorf("idea %q should be gone after %v; backlog:\n%s", id, tt.args, got)
+				}
+			}
+			for _, id := range tt.kept {
+				if !strings.Contains(got, id) {
+					t.Errorf("idea %q should be kept after %v; backlog:\n%s", id, tt.args, got)
+				}
 			}
 		})
 	}

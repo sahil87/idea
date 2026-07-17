@@ -840,9 +840,9 @@ func TestRm_WithoutForce(t *testing.T) {
 
 	_, _, err := Rm(path, "a7k2", false)
 	if err == nil {
-		t.Fatal("expected error without --force")
+		t.Fatal("expected error without consent")
 	}
-	if !strings.Contains(err.Error(), "Use --force") {
+	if !strings.Contains(err.Error(), "Use --yes (or --force)") {
 		t.Errorf("error = %q", err.Error())
 	}
 }
@@ -873,6 +873,63 @@ Footer
 	}
 	if !strings.Contains(result, "c3d4") {
 		t.Error("other idea should be preserved")
+	}
+}
+
+// TestRmPreview covers the non-destructive dry-run seam backing
+// `idea rm --dry-run`: it resolves the would-be-removed idea via the same
+// match path Rm uses (RequireSingle over FilterAll) and MUST never write the
+// file. Table-driven against real temp dirs (Constitution V).
+func TestRmPreview(t *testing.T) {
+	const content = `# Backlog
+
+- [ ] [a7k2] 2025-06-15: Add dark mode
+- [x] [c3d4] 2025-06-10: Fix redirect
+`
+	tests := []struct {
+		name       string
+		query      string
+		wantID     string
+		wantErr    bool
+		wantErrSub string
+	}{
+		{name: "exact id match returns idea", query: "a7k2", wantID: "a7k2"},
+		{name: "matches a done idea too (FilterAll)", query: "c3d4", wantID: "c3d4"},
+		{name: "no match errors", query: "zzzz", wantErr: true, wantErrSub: "No idea matching"},
+		{name: "ambiguous refuses like the live delete", query: "e", wantErr: true, wantErrSub: "Multiple matches"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := writeBacklog(t, dir, content)
+			before, _ := os.ReadFile(path)
+			beforeStr := string(before)
+
+			got, err := RmPreview(path, tt.query)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("RmPreview(%q): expected error, got idea %q", tt.query, got.ID)
+				}
+				if tt.wantErrSub != "" && !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErrSub)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("RmPreview(%q): unexpected error: %v", tt.query, err)
+				}
+				if got.ID != tt.wantID {
+					t.Errorf("previewed ID = %q, want %q", got.ID, tt.wantID)
+				}
+			}
+
+			// Preview MUST never write: the file is byte-identical in every case.
+			after, _ := os.ReadFile(path)
+			if string(after) != beforeStr {
+				t.Errorf("RmPreview wrote the file; want byte-identical.\nbefore:\n%s\nafter:\n%s", beforeStr, after)
+			}
+		})
 	}
 }
 

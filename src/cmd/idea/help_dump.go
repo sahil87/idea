@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -22,11 +21,13 @@ type helpNode struct {
 	Commands []helpNode `json:"commands"`
 }
 
-// helpDump is the top-level envelope wrapping the help tree.
+// helpDump is the top-level envelope wrapping the help tree. The envelope is
+// exactly {tool, version, schema_version, root} — it deliberately does NOT carry
+// a captured_at field: the capture timestamp is owned by shll.ai's puller (a tool
+// cannot know its own capture time), per the toolkit help-dump standard.
 type helpDump struct {
 	Tool          string   `json:"tool"`
 	Version       string   `json:"version"`
-	CapturedAt    string   `json:"captured_at"`
 	SchemaVersion int      `json:"schema_version"`
 	Root          helpNode `json:"root"`
 }
@@ -106,7 +107,6 @@ func helpDumpCmd() *cobra.Command {
 			dump := helpDump{
 				Tool:          "idea",
 				Version:       root.Version,
-				CapturedAt:    time.Now().UTC().Format(time.RFC3339),
 				SchemaVersion: helpSchemaVersion,
 				Root:          buildNode(root),
 			}
