@@ -43,6 +43,9 @@ Builds MUST be reproducible via `go build` from a clean checkout with no environ
 ### Dependency Discipline
 Direct dependencies SHOULD be limited to the standard library plus `github.com/spf13/cobra`. New dependencies require justification in the change spec — "convenience" is not justification.
 
+### Toolkit Standards
+This tool is part of the sahil87 toolkit and MUST conform to the toolkit's published standards. The standards are enumerated by running `shll standards` — each entry names what it governs; read one with `shll standards <name>`. Before changing the CLI surface, help output, README.md, or docs/site/, the change MUST be checked against the standards governing that surface. If shll is unavailable, the canonical sources are the sahil87/shll repository's docs/site/standards/ tree (rendered on https://shll.ai). Standards added or revised there bind this repo without further amendment to this constitution.
+
 ## Governance
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-05-03
+**Version**: 1.1.0 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-07-18
