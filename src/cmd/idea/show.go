@@ -28,7 +28,7 @@ used automatically.
 
   idea show a7k2
   idea show "dark mode" --json`,
-		Args: cobra.ExactArgs(1),
+		Args: usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {

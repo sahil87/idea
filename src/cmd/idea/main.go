@@ -21,6 +21,32 @@ var version = "dev"
 // handler in main exits non-zero without printing anything additional.
 var errSilent = errors.New("silent")
 
+// usageError marks an error as stemming from a malformed invocation (bad flag,
+// wrong arg count, conflicting target flags) so main() maps it to exit 2 per the
+// toolkit exit-code convention (0 success / 1 operational failure / 2 usage
+// error). Exit-code policy is a cmd/ concern (Constitution IV); internal/idea
+// stays policy-free.
+//
+// Unwrap() is load-bearing: it lets a usage error compose with errSilent — a
+// self-printed usage error returns &usageError{errSilent} (exit 2, no extra
+// "ERROR:" line) — and keeps errors.Is/errors.As classification working in main().
+type usageError struct{ err error }
+
+func (u *usageError) Error() string { return u.err.Error() }
+func (u *usageError) Unwrap() error { return u.err }
+
+// usageArgs wraps a cobra positional-args validator so its rejection is
+// classified as a usage error (exit 2). SetFlagErrorFunc does not catch
+// arg-count errors, so each subcommand's Args validator is wrapped explicitly.
+func usageArgs(v cobra.PositionalArgs) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := v(cmd, args); err != nil {
+			return &usageError{err}
+		}
+		return nil
+	}
+}
+
 // newRootCmd builds the root command and registers all subcommands. It is the
 // single source of the live cobra tree: both main() and the help-dump producer
 // (which walks cmd.Root()) operate on the identical tree this factory builds.
@@ -56,6 +82,13 @@ Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 			return add.RunE(add, []string{strings.Join(args, " ")})
 		},
 	}
+
+	// Classify every flag-parse error as a usage error (exit 2). Cobra inherits
+	// FlagErrorFunc from the parent, so all subcommands are covered without
+	// per-command wiring. The message text is unchanged.
+	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		return &usageError{err}
+	})
 
 	root.PersistentFlags().StringVarP(&fileFlag, "file", "f", "", "Override backlog file path (relative to the git root, or to ~/.config/idea when outside a repo)")
 	root.PersistentFlags().BoolVarP(&mainFlag, "main", "m", false, "Operate on the main worktree's backlog instead of the current worktree")
@@ -98,6 +131,14 @@ func main() {
 		if !errors.Is(err, errSilent) {
 			fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 		}
-		os.Exit(1)
+		// Toolkit exit-code convention: usage errors (bad flag, wrong arg
+		// count, conflicting target flags) exit 2; every other operational
+		// failure exits 1.
+		code := 1
+		var uerr *usageError
+		if errors.As(err, &uerr) {
+			code = 2
+		}
+		os.Exit(code)
 	}
 }

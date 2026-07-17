@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1361,6 +1362,78 @@ func TestRmPruneConsent_CLI(t *testing.T) {
 				if !strings.Contains(got, id) {
 					t.Errorf("idea %q should be kept after %v; backlog:\n%s", id, tt.args, got)
 				}
+			}
+		})
+	}
+}
+
+// exitCodeOf extracts the process exit code from an error returned by
+// runSplit/runSplitEnv (cmd.Run). It returns 0 for a nil error (success) and
+// fails the test if the error is not an *exec.ExitError (e.g. the binary could
+// not be launched), since only a genuine non-zero exit is a meaningful code.
+func exitCodeOf(t *testing.T, err error) int {
+	t.Helper()
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
+		t.Fatalf("expected *exec.ExitError, got %T: %v", err, err)
+	}
+	return ee.ExitCode()
+}
+
+// TestExitCodes_UsageVsOperationalVsSuccess is the exit-code matrix for the
+// toolkit convention (0 success / 1 operational failure / 2 usage error). It
+// asserts that every usage-error class exits 2 (root/subcommand unknown flag,
+// arg-count violations, the --system/--main target conflict), operational
+// failures exit 1 (no-match query, declined consent, non-canonical fmt --check),
+// and a representative happy path exits 0. The seeded backlog carries one dated
+// idea so it is already canonical (fmt --check clean) for the cases that need it.
+func TestExitCodes_UsageVsOperationalVsSuccess(t *testing.T) {
+	bin := buildBinary(t)
+
+	const seed = "# Backlog\n\n- [ ] [ab12] 2026-06-01: seeded idea\n"
+
+	tests := []struct {
+		name     string
+		backlog  string // overrides seed when non-empty
+		args     []string
+		wantExit int
+	}{
+		// Usage -> 2
+		{name: "root unknown flag", args: []string{"--nope"}, wantExit: 2},
+		{name: "subcommand unknown flag", args: []string{"list", "--bogus"}, wantExit: 2},
+		{name: "add missing arg", args: []string{"add"}, wantExit: 2},
+		{name: "fmt extra arg", args: []string{"fmt", "extra"}, wantExit: 2},
+		{name: "skill extra arg", args: []string{"skill", "extra"}, wantExit: 2},
+		{name: "edit missing arg", args: []string{"edit"}, wantExit: 2},
+		{name: "system+main conflict", args: []string{"-s", "-m", "list"}, wantExit: 2},
+		// Operational -> 1
+		{name: "no-match query", args: []string{"done", "zzzz"}, wantExit: 1},
+		{name: "rm without consent", args: []string{"rm", "ab12"}, wantExit: 1},
+		{
+			name:     "fmt --check non-canonical",
+			backlog:  "- [ ] [cd34] dateless (non-canonical) idea\n",
+			args:     []string{"fmt", "--check"},
+			wantExit: 1,
+		},
+		// Success -> 0
+		{name: "list happy path", args: []string{"list"}, wantExit: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			content := seed
+			if tt.backlog != "" {
+				content = tt.backlog
+			}
+			writeRepoBacklog(t, repo, content)
+
+			_, _, err := runSplit(t, bin, repo, tt.args...)
+			if got := exitCodeOf(t, err); got != tt.wantExit {
+				t.Errorf("exit code = %d, want %d", got, tt.wantExit)
 			}
 		})
 	}

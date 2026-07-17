@@ -38,14 +38,14 @@ system backlog is used automatically.
   idea list --all --sort id
   idea ls a7k2 b3c9 --full
   idea list --json`,
-		Args: func(cmd *cobra.Command, args []string) error {
+		Args: usageArgs(func(cmd *cobra.Command, args []string) error {
 			for _, a := range args {
 				if err := idea.ValidateID(a); err != nil {
 					return err
 				}
 			}
 			return nil
-		},
+		}),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {

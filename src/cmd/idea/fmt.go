@@ -34,7 +34,7 @@ targets the main worktree's backlog, --system targets the system-level backlog
 
   idea fmt
   idea fmt --check`,
-		Args: cobra.NoArgs,
+		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {

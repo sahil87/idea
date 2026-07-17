@@ -33,7 +33,7 @@ targets the main worktree's backlog, --system targets the system-level backlog
   idea edit a7k2 "wire up dark mode toggle"
   idea edit a7k2                  # open the current text in your editor
   idea edit a7k2 --date 2026-06-01 "backdated rewrite"`,
-		Args: cobra.RangeArgs(1, 2),
+		Args: usageArgs(cobra.RangeArgs(1, 2)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {
