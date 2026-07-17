@@ -82,10 +82,14 @@ func TestSkill_LineBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read embedded %s: %v", skillEmbedPath, err)
 	}
+	// Line count = number of '\n' bytes, plus one more when the file is non-empty
+	// and lacks a trailing newline (its final line contributes no '\n'). Counting
+	// '\n' alone would undercount by one on a non-newline-terminated file, letting
+	// a bundle that is exactly one line over budget slip through the guard.
 	n := bytes.Count(data, []byte{'\n'})
-	// A file ending in a trailing newline has one fewer content line than \n
-	// count only when the last line is empty; count \n directly as the line count
-	// for a newline-terminated file (each content line contributes one \n).
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		n++
+	}
 	if n > maxSkillLines {
 		t.Errorf("skill bundle is %d lines, over the %d-line budget (toolkit skill standard) — trim docs/site/skill.md", n, maxSkillLines)
 	}
@@ -105,6 +109,14 @@ func TestSkillEmbedMatchesCanonical(t *testing.T) {
 	canonicalPath := filepath.Join("..", "..", "..", "docs", "site", "skill.md")
 	canonical, err := os.ReadFile(canonicalPath)
 	if err != nil {
+		// The canonical doc sits above the module root (go.mod is in src/), so the
+		// module zip a downstream `go get` fetches omits it. Its absence means we
+		// are outside a full repo checkout — skip the drift guard rather than fail
+		// on a file-not-found unrelated to drift. In a full checkout / CI the file
+		// is present, so real drift still fails below.
+		if os.IsNotExist(err) {
+			t.Skipf("canonical %s absent (outside full repo checkout) — skipping drift guard", canonicalPath)
+		}
 		t.Fatalf("read canonical %s: %v", canonicalPath, err)
 	}
 	if !bytes.Equal(embedded, canonical) {
