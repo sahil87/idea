@@ -1,0 +1,55 @@
+id: 3q43
+name: 260717-3q43-adopt-toolkit-skill-standard
+created: 2026-07-17T21:40:45Z
+created_by: sahil-noon
+change_type: feat
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: active
+    review-pr: pending
+plan:
+    generated: true
+    task_count: 7
+    acceptance_count: 18
+    acceptance_completed: 18
+confidence:
+    certain: 3
+    confident: 4
+    tentative: 0
+    unresolved: 0
+    score: 4.4
+    fuzzy: true
+    dimensions:
+        signal: 69.3
+        reversibility: 85.7
+        competence: 80.7
+        disambiguation: 77.9
+stage_metrics:
+    intake: {started_at: "2026-07-17T21:40:45Z", driver: fab-new, iterations: 1, completed_at: "2026-07-17T21:48:11Z"}
+    apply: {started_at: "2026-07-17T21:48:11Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-17T21:54:41Z"}
+    review: {started_at: "2026-07-17T21:54:41Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-17T22:04:29Z"}
+    hydrate: {started_at: "2026-07-17T22:04:29Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-17T22:08:13Z"}
+    ship: {started_at: "2026-07-17T22:08:13Z", driver: fab-fff, iterations: 1}
+prs: []
+change_type_source: explicit
+true_impact:
+    added: 0
+    deleted: 0
+    net: 0
+    excluding:
+        added: 0
+        deleted: 0
+        net: 0
+    tests:
+        added: 0
+        deleted: 0
+        net: 0
+    computed_at: "2026-07-17T22:08:13Z"
+    computed_at_stage: hydrate
+summary: Add idea skill subcommand printing an embedded static usage bundle (byte-identical to docs/site/skill.md via sync-skill.sh + drift-guard); document in cli/skill.md, cli/structure.md, release/pipeline.md
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-07-17T22:08:13Z
