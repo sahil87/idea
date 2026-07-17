@@ -44,9 +44,10 @@ func TestHelpDump_Envelope(t *testing.T) {
 	}
 	// The envelope MUST NOT emit captured_at: the capture timestamp is owned by
 	// shll.ai's puller, not the tool (toolkit help-dump standard, "rule with
-	// teeth"). Assert the field is absent from the raw JSON bytes.
-	if strings.Contains(string(raw), "captured_at") {
-		t.Errorf("help-dump envelope must not contain \"captured_at\", found it in raw JSON:\n%s", raw)
+	// teeth"). Assert the JSON *key* is absent (match the key token, not the bare
+	// substring, so unrelated occurrences in help text cannot trip the check).
+	if strings.Contains(string(raw), `"captured_at":`) {
+		t.Errorf("help-dump envelope must not contain a \"captured_at\" key, found it in raw JSON:\n%s", raw)
 	}
 }
 
