@@ -9,8 +9,8 @@ progress:
     apply: done
     review: done
     hydrate: done
-    ship: active
-    review-pr: pending
+    ship: done
+    review-pr: active
 plan:
     generated: true
     task_count: 7
@@ -33,23 +33,25 @@ stage_metrics:
     apply: {started_at: "2026-07-17T21:48:11Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-17T21:54:41Z"}
     review: {started_at: "2026-07-17T21:54:41Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-17T22:04:29Z"}
     hydrate: {started_at: "2026-07-17T22:04:29Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-17T22:08:13Z"}
-    ship: {started_at: "2026-07-17T22:08:13Z", driver: fab-fff, iterations: 1}
-prs: []
+    ship: {started_at: "2026-07-17T22:08:13Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-17T22:09:39Z"}
+    review-pr: {started_at: "2026-07-17T22:09:39Z", driver: git-pr, iterations: 1}
+prs:
+    - https://github.com/sahil87/idea/pull/34
 change_type_source: explicit
 true_impact:
-    added: 0
-    deleted: 0
-    net: 0
+    added: 854
+    deleted: 4
+    net: 850
     excluding:
-        added: 0
+        added: 303
         deleted: 0
-        net: 0
+        net: 303
     tests:
-        added: 0
+        added: 114
         deleted: 0
-        net: 0
-    computed_at: "2026-07-17T22:08:13Z"
-    computed_at_stage: hydrate
+        net: 114
+    computed_at: "2026-07-17T22:09:39Z"
+    computed_at_stage: ship
 summary: Add idea skill subcommand printing an embedded static usage bundle (byte-identical to docs/site/skill.md via sync-skill.sh + drift-guard); document in cli/skill.md, cli/structure.md, release/pipeline.md
 # true_impact: lazily created on first stage-finish that computes it (no placeholder here).
-last_updated: 2026-07-17T22:08:13Z
+last_updated: 2026-07-17T22:09:39Z
