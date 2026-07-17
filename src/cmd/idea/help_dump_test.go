@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 )
 
 // runHelpDump executes the help-dump command in-process via newRootCmd(),
@@ -32,7 +31,7 @@ func runHelpDump(t *testing.T) ([]byte, helpDump) {
 }
 
 func TestHelpDump_Envelope(t *testing.T) {
-	_, dump := runHelpDump(t)
+	raw, dump := runHelpDump(t)
 
 	if dump.Tool != "idea" {
 		t.Errorf("tool = %q, want %q", dump.Tool, "idea")
@@ -43,8 +42,11 @@ func TestHelpDump_Envelope(t *testing.T) {
 	if dump.Version == "" {
 		t.Error("version is empty, want the ldflags-stamped value (e.g. \"dev\")")
 	}
-	if _, err := time.Parse(time.RFC3339, dump.CapturedAt); err != nil {
-		t.Errorf("captured_at %q does not parse as RFC3339: %v", dump.CapturedAt, err)
+	// The envelope MUST NOT emit captured_at: the capture timestamp is owned by
+	// shll.ai's puller, not the tool (toolkit help-dump standard, "rule with
+	// teeth"). Assert the field is absent from the raw JSON bytes.
+	if strings.Contains(string(raw), "captured_at") {
+		t.Errorf("help-dump envelope must not contain \"captured_at\", found it in raw JSON:\n%s", raw)
 	}
 }
 

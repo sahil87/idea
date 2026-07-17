@@ -93,10 +93,10 @@ Queries (the `<id>` arg on `show`, `done`, `reopen`, `edit`, `rm`) match against
 | `idea done <query>` | Mark an idea as done. |
 | `idea reopen <query>` | Reopen a completed idea. |
 | `idea edit <query> "text"` | Replace an idea's description. |
-| `idea rm <query> --force` | Delete an idea (requires `--force` to confirm). |
+| `idea rm <query> --yes` | Delete an idea (requires `--yes`/`-y` — or the equivalent `--force` — to confirm; `--dry-run` previews the match without deleting). |
 | `idea update` | Self-update via Homebrew. |
 
-Run `idea <command> --help` for inline flag details, browse the [full command reference](https://shll.ai/tools/idea/commands/) on shll.ai, or see [`docs/specs/overview.md`](https://github.com/sahil87/idea/blob/main/docs/specs/overview.md) for the full CLI reference and [`docs/specs/backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) for the file format contract.
+Run `idea <command> --help` for inline flag details, browse the [full command reference](https://shll.ai/idea/commands/) on shll.ai, or see [`docs/specs/overview.md`](https://github.com/sahil87/idea/blob/main/docs/specs/overview.md) for the full CLI reference and [`docs/specs/backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) for the file format contract.
 
 ### Worktree-aware by default
 
@@ -131,6 +131,6 @@ For a deeper walkthrough of worktree resolution, the fab-kit loop, and the backl
 
 ## Gotchas
 
-- **`idea rm` requires `--force`.** This is intentional — deletes are destructive and there's no undo. Use `idea done` if you just want the item out of `idea list`.
+- **`idea rm` requires `--yes` (or the equivalent `--force`).** This is intentional — deletes are destructive and there's no undo. Preview with `--dry-run`, or use `idea done` if you just want the item out of `idea list`.
 - **Ambiguous queries refuse to act.** If your query matches more than one idea, `idea done`, `edit`, and `rm` print the matches and exit without changing anything. Disambiguate with the 4-char ID.
 - **Lines with extra brackets are invisible to queries.** fab-kit's `/fab-new` writes issue IDs into a second bracket (e.g., `- [ ] [qu1d] [DEV-1011] 2026-05-11: ...`). Those lines are preserved verbatim in the file but won't appear in `idea list` or match `idea show` — they're treated as inert pass-through content. See [`backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) for the Shape A vs. Shape B distinction.

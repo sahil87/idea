@@ -872,7 +872,7 @@ func Edit(path, query, newText, newID, newDate string) (Idea, int, error) {
 // Rm removes a single matching idea from the file. See Done for the count.
 func Rm(path, query string, force bool) (Idea, int, error) {
 	if !force {
-		return Idea{}, 0, fmt.Errorf("Use --force to confirm deletion")
+		return Idea{}, 0, fmt.Errorf("Use --yes (or --force) to confirm deletion")
 	}
 
 	f, err := LoadFile(path)
@@ -893,6 +893,25 @@ func Rm(path, query string, force bool) (Idea, int, error) {
 		return Idea{}, 0, err
 	}
 	return removed, backfilled, nil
+}
+
+// RmPreview resolves the idea a matching Rm would remove WITHOUT writing the
+// file — the accurate, no-op preview backing `idea rm --dry-run`. It shares the
+// exact match path Rm uses (LoadFile + RequireSingle over FilterAll), so an
+// ambiguous or unmatched query is refused identically to the live delete; the
+// dry-run therefore can never drift from the live behavior. No consent is
+// required (a preview is non-destructive) and nothing is ever written.
+func RmPreview(path, query string) (Idea, error) {
+	f, err := LoadFile(path)
+	if err != nil {
+		return Idea{}, err
+	}
+
+	match, _, err := RequireSingle(query, f.ideas, FilterAll)
+	if err != nil {
+		return Idea{}, err
+	}
+	return match, nil
 }
 
 // removeIdeaAt removes the idea at index idx from the file's bookkeeping —
