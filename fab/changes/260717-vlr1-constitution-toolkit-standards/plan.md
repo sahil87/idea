@@ -33,7 +33,7 @@ The `## Governance` line MUST be updated to `**Version**: 1.1.0 | **Ratified**: 
 ### Non-Goals
 
 - No conformance fixes — the CLI surface, help output, README.md, and docs/site/ are not audited or changed against the standards. This change only installs the obligation for future changes.
-- No file other than `fab/project/constitution.md` is touched.
+- No file other than `fab/project/constitution.md` is touched, aside from this change's own fab record under `fab/changes/260717-vlr1-constitution-toolkit-standards/` that every fab change carries.
 - No memory hydration of the obligation — the constitution is always-loaded governance; duplicating it into `docs/memory/` would create a second source of truth (handled at the hydrate stage, informational here).
 
 ### Design Decisions
@@ -66,7 +66,7 @@ The `## Governance` line MUST be updated to `**Version**: 1.1.0 | **Ratified**: 
 
 ### Scenario Coverage
 
-- [x] A-005 R1: No file other than `fab/project/constitution.md` is modified by this change (git diff shows a single touched file)
+- [x] A-005 R1: No file other than `fab/project/constitution.md` is modified by this change, excluding the change's own fab record under `fab/changes/260717-vlr1-constitution-toolkit-standards/` that every fab change carries (git diff shows a single touched file outside that record)
 
 ### Code Quality
 

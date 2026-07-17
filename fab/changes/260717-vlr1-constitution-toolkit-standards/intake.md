@@ -54,7 +54,7 @@ Update the `## Governance` line:
 
 - **No enumeration in the constitution**: no standard names, counts, or per-standard URLs are copied in. `shll standards` is the enumeration; the article must stay correct as standards evolve. Only the two stable pointers appear: the `shll standards` command and the canonical source location (sahil87/shll `docs/site/standards/`, rendered on https://shll.ai).
 - **No conformance fixes**: this change does not audit or fix the CLI surface, help output, README.md, or docs/site/ against the standards. It only installs the obligation for future changes.
-- **No other file changes**: `fab/project/constitution.md` is the only file touched.
+- **No other file changes**: outside this change's own fab record (`fab/changes/260717-vlr1-constitution-toolkit-standards/`, which every fab change carries), `fab/project/constitution.md` is the only file touched — no source, tests, README, or docs/site/.
 
 ## Affected Memory
 
@@ -62,7 +62,7 @@ None. The constitution is always-loaded fab governance, not spec-level system be
 
 ## Impact
 
-- **Files**: `fab/project/constitution.md` only (one new `###` subsection + one governance-line edit).
+- **Files**: `fab/project/constitution.md` only (one new `###` subsection + one governance-line edit), aside from this change's own fab record files under `fab/changes/260717-vlr1-constitution-toolkit-standards/` that every fab change carries.
 - **Code/tests**: none. No source, no tests, no build impact. (`fab/` is in `true_impact_exclude`.)
 - **Behavioral effect**: every future pipeline run in this repo loads the obligation via the always-load context layer; changes touching the CLI surface, help output, README.md, or docs/site/ must be checked against the governing standards from now on.
 - **Change type**: docs.
