@@ -3,6 +3,7 @@ package idea
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -13,6 +14,13 @@ import (
 	"strings"
 	"time"
 )
+
+// ErrConflictingTargets is returned by ResolveBacklogPath when both --system and
+// --main are passed. It names the condition (a malformed invocation) without
+// dictating an exit code — the cmd/ layer classifies it as a usage error
+// (Constitution IV keeps exit-code policy in cmd/). The message text is the
+// public, stable refusal string.
+var ErrConflictingTargets = errors.New("--system and --main are mutually exclusive; pass only one")
 
 // Idea represents a single backlog item.
 type Idea struct {
@@ -447,7 +455,7 @@ func SystemBacklogPath() (string, error) {
 // both is a user error and returns a non-nil error without resolving a path.
 func ResolveBacklogPath(systemFlag, mainFlag bool, fileFlag string) (string, error) {
 	if systemFlag && mainFlag {
-		return "", fmt.Errorf("--system and --main are mutually exclusive; pass only one")
+		return "", ErrConflictingTargets
 	}
 
 	// 1. --system forces the system backlog from anywhere, skipping git.

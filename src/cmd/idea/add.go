@@ -25,7 +25,7 @@ git repo the system backlog is used automatically.
 
   idea add "wire up dark mode"
   idea add --id a7k2 --date 2026-06-01 "backdated idea"`,
-		Args: cobra.ExactArgs(1),
+		Args: usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {

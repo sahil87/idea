@@ -59,6 +59,18 @@ In all rooted cases an absolute `--file`/`IDEAS_FILE` value is used verbatim.
 
 **Editor form contract** (`idea edit <query>`, no text argument): an unchanged buffer is a no-op — the backlog is untouched, a `note: text unchanged — nothing to do` advisory goes to stderr, and the exit code is 0. An emptied buffer is refused: no change, non-zero exit. A non-zero editor exit aborts: the backlog is untouched, non-zero exit. Passing `--id`/`--date` with the no-text form still opens the editor, applies the metadata at save, and suppresses the unchanged no-op — a metadata-only change lands without mutating the text.
 
+### Exit codes
+
+`idea` follows the toolkit exit-code convention so a caller (or agent) can branch on *why* a command failed:
+
+| Code | Class | Examples |
+|------|-------|----------|
+| `0` | Success | any command that completed its operation |
+| `1` | Operational failure | no idea matched a query, ambiguous match, declined consent (`rm`/`prune` without `--yes`/`--force`), `fmt --check` on a non-canonical file, file I/O / editor / git-resolution errors |
+| `2` | Usage error | unknown flag, wrong argument count, `--system` + `--main` together, `shell-init` with a missing/unsupported shell |
+
+The distinction is between a *malformed invocation* (fix the command line → `2`) and a *well-formed invocation whose operation failed* (a different remedy → `1`). Error message wording is unchanged by this convention; only the exit code distinguishes the two failure classes.
+
 ## ID Format & Query Semantics
 
 Each idea gets a short 4-character lowercase alphanumeric ID (e.g., `[a7k2]`) and an ISO date (`YYYY-MM-DD`). IDs are unique within a single backlog file.

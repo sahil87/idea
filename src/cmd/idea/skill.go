@@ -50,7 +50,7 @@ renders at https://shll.ai/idea/skill), so it is offline, static, and versioned
 with the release.
 
   idea skill`,
-		Args: cobra.NoArgs,
+		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSkill(cmd.OutOrStdout())
 		},

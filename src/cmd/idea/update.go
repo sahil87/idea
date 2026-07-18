@@ -28,7 +28,7 @@ command explains how to update manually instead.
 
   idea update
   idea update --skip-brew-update`,
-		Args: cobra.NoArgs,
+		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			err := idea.Update(version, skipBrewUpdate, cmd.OutOrStdout(), cmd.ErrOrStderr())
 			// internal/idea writes its own "brew not found" hint to stderr

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -40,7 +39,7 @@ Supported shells: zsh, bash, fish, powershell.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				fmt.Fprintf(cmd.ErrOrStderr(), "idea shell-init: missing shell. Supported: %s\n", shellListForError)
-				os.Exit(2)
+				return &usageError{errSilent}
 			}
 			shell := args[0]
 			out := cmd.OutOrStdout()
@@ -57,9 +56,8 @@ Supported shells: zsh, bash, fish, powershell.`,
 				return emitPowerShell(root, out)
 			default:
 				fmt.Fprintf(cmd.ErrOrStderr(), "idea shell-init: unsupported shell '%s'. Supported: %s\n", shell, shellListForError)
-				os.Exit(2)
+				return &usageError{errSilent}
 			}
-			return nil
 		},
 	}
 	return cmd

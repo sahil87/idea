@@ -32,7 +32,7 @@ system backlog is used automatically.
 
   idea prune
   idea prune --yes`,
-		Args: cobra.NoArgs,
+		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {

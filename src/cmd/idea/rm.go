@@ -28,7 +28,7 @@ main worktree's backlog, --system targets the system-level backlog
 
   idea rm a7k2 --yes
   idea rm a7k2 --dry-run`,
-		Args: cobra.ExactArgs(1),
+		Args: usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveFile()
 			if err != nil {
