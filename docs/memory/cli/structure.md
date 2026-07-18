@@ -19,7 +19,9 @@ src/
       add.go list.go show.go done.go reopen.go edit.go rm.go prune.go fmt.go resolve.go update.go shell_init.go
       output.go                # printIdeaLines: the single TTY-aware list/prune render path
       help_dump.go             # hidden "help-dump" subcommand (CLI tree → JSON)
-      main_test.go fmt_test.go shell_init_test.go help_dump_test.go
+      skill.go                 # visible "skill" subcommand: prints the embedded agent usage bundle (//go:embed)
+      skill/skill.md           # committed byte-identical copy of docs/site/skill.md (the //go:embed target)
+      main_test.go fmt_test.go shell_init_test.go help_dump_test.go skill_test.go
   internal/
     idea/                      # package logic (parsing, formatting, ID gen, file I/O, worktree resolution, self-update, $EDITOR round-trip)
       idea.go
@@ -225,7 +227,7 @@ The destructive single-item `rm` and bulk `prune` commands both gate deletion be
 
 The constitution's § Toolkit Standards article (v1.1.0, ratified `260717-vlr1`) binds this repo to the sahil87 toolkit's published standards. The standards are **enumerated at runtime** — `shll standards` lists them (`principles`, `help-dump`, `readme-extraction`, `skill` @ shll v0.0.23), and `shll standards <name>` reads each; the runtime list is authoritative over any snapshot (standards are versioned with the shll release, canonical sources under `sahil87/shll` `docs/site/standards/`, rendered on https://shll.ai). Before changing the CLI surface, help output, `README.md`, or `docs/site/`, the change must be checked against the standards governing that surface.
 
-`260717-9uh7-toolkit-standards-conformance` was the first full audit against these standards. It fixed the mechanical `help-dump` violation (the `captured_at` removal above), added the `--yes`/`-y` consent alias and `rm --dry-run` for principles №1/№5 (above), and corrected the README/`docs/site` command-reference URL (see `../release/pipeline.md`). Two gaps were deferred to `fab/backlog.md` rather than fixed: **`[3q43]`** — adopting the `skill` standard (`idea` ships no `skill` subcommand; deferred per the standard's phased per-repo adoption, principle №10 is a SHOULD so absence is not yet a violation); and **`[xvsj]`** — a tree-wide usage-error exit-code-`2` convention (today only `shell-init` returns 2; cobra's `SetFlagErrorFunc` catches flag errors but not arg-count/unknown-command errors, so a complete fix is structural — a flag-only partial fix would make usage-error classes disagree). The conformance report artifact lives at the change folder's `conformance-report.md`.
+`260717-9uh7-toolkit-standards-conformance` was the first full audit against these standards. It fixed the mechanical `help-dump` violation (the `captured_at` removal above), added the `--yes`/`-y` consent alias and `rm --dry-run` for principles №1/№5 (above), and corrected the README/`docs/site` command-reference URL (see `../release/pipeline.md`). Two gaps were deferred to `fab/backlog.md` rather than fixed: **`[3q43]`** — adopting the `skill` standard (deferred per the standard's phased per-repo adoption, principle №10 is a SHOULD so absence was not yet a violation; **since adopted** by `260717-3q43-adopt-toolkit-skill-standard`, which added the visible `idea skill` command — see [skill](skill.md)); and **`[xvsj]`** — a tree-wide usage-error exit-code-`2` convention (today only `shell-init` returns 2; cobra's `SetFlagErrorFunc` catches flag errors but not arg-count/unknown-command errors, so a complete fix is structural — a flag-only partial fix would make usage-error classes disagree). The conformance report artifact lives at the change folder's `conformance-report.md`.
 
 ### Explicit canonicalizer & adoption (`idea fmt`)
 
@@ -285,9 +287,11 @@ This is the single source for the shll.ai command-reference: the `help-dump` sub
 ```go
 root.AddCommand(
     addCmd(), listCmd(), showCmd(), doneCmd(), reopenCmd(),
-    editCmd(), rmCmd(), pruneCmd(), fmtCmd(), updateCmd(), newShellInitCmd(), helpDumpCmd(),
+    editCmd(), rmCmd(), pruneCmd(), fmtCmd(), updateCmd(), skillCmd(), newShellInitCmd(), helpDumpCmd(),
 )
 ```
+
+`skillCmd()` (added by `260717-3q43-adopt-toolkit-skill-standard`) is the visible agent-usage-bundle command — see the *`skill` subcommand and the embedded bundle* section below and [skill](skill.md).
 
 `main()` is then a four-line wrapper: `newRootCmd().Execute()` with the existing `errSilent` sentinel handling (`errors.Is(err, errSilent)` skips the `ERROR:` line) and `os.Exit(1)` on error.
 
@@ -330,6 +334,12 @@ The output is `json.MarshalIndent(dump, "", "  ")` (2-space indent) plus a trail
 
 `help_dump_test.go` exercises the command in-process via `newRootCmd()` and asserts the envelope, root `name`/`path`, filter exclusions, every real subcommand present with the correct `path`, leaf `commands: []` on the raw JSON bytes, and (the contract lock) that root `text` contains both `-h, --help` and `-v, --version` while a leaf's `text` contains `-h, --help` but not `-v, --version`.
 
+## `skill` subcommand and the embedded bundle
+
+`cmd/idea/skill.go` (added by `260717-3q43-adopt-toolkit-skill-standard`) registers a **visible** `skill` subcommand — the agent-facing usage bundle — via `skillCmd()` in the `newRootCmd()` roster (between `updateCmd()` and `newShellInitCmd()`). Like `help_dump.go` it carries no `internal/idea` business logic: it reads embedded bytes and prints them, which lives acceptably in `cmd/` (Constitution IV — the command has no backlog logic at all). Full contract (static-only rule, stdout/stderr/exit semantics, ≤150-line budget, the sync + drift-guard mechanism) is in [skill](skill.md); it is the first repo adopter of the toolkit `skill` standard (see § Toolkit-standards conformance).
+
+**First `//go:embed` in the repo.** `skill.go` carries the repo's **first** `//go:embed` directive — `//go:embed skill/skill.md` into an `embed.FS`, plus a `//go:generate ../../../scripts/sync-skill.sh` directive mirroring shll's `standards.go`. `embed` is stdlib, so no new dependency (Dependency Discipline). The embed target is a **committed copy** at `cmd/idea/skill/skill.md`, kept byte-identical to the canonical `docs/site/skill.md` by `scripts/sync-skill.sh` and pinned by `skill_test.go`'s drift guard — the module root is `src/` and `docs/site/` sits above it, so `//go:embed` cannot reach the canonical file directly (see [skill](skill.md) for why the copy exists).
+
 ## Version stamping
 
 `cmd/idea/main.go` declares a package-level `var version = "dev"`, with the comment:
@@ -354,4 +364,5 @@ This wiring is required because `idea` is released independently:
 - `idea list`/`ls` TTY-aware rendering contract — truncation, `--full`, the `[id...]` filter, and color (`list.go` / `internal/idea/term.go`): `list.md`.
 - Bulk-remove subcommand (`prune.go` / `idea.Prune`): dry-run/`--force` contract, the count header + interactive `[y/N]` confirm, output channels, and the deliberate non-archival design: `prune.md`.
 - `edit` subcommand two-form contract and the `$VISUAL`/`$EDITOR`/`vi` temp-file round trip (`edit.go` / `internal/idea/editor.go`): `edit.md`.
+- `skill` subcommand — the embedded agent usage bundle, its static-only/stdout/exit contract, and the sync + drift-guard mechanism (`skill.go` / `scripts/sync-skill.sh` / `docs/site/skill.md`): `skill.md`.
 - Constitution principles III and IV: `fab/project/constitution.md`.

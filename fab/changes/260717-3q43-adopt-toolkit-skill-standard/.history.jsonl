@@ -1,0 +1,15 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-07-17T21:40:45Z"}
+{"args":"Adopt the toolkit skill standard: add idea skill subcommand printing a stable static \u003c=150-line agent usage bundle, byte-identical to docs/site/skill.md, wired via sync+drift-guard pattern (backlog 3q43)","cmd":"fab-new","event":"command","ts":"2026-07-17T21:40:45Z"}
+{"delta":"+4.4","event":"confidence","score":4.4,"trigger":"calc-score","ts":"2026-07-17T21:42:49Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-07-17T21:47:30Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-07-17T21:48:11Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-07-17T21:49:42Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-07-17T21:54:41Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-07-17T21:55:38Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-07-17T22:04:29Z"}
+{"event":"review","result":"passed","ts":"2026-07-17T22:04:29Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-07-17T22:05:13Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-07-17T22:08:13Z"}
+{"action":"enter","driver":"git-pr","event":"stage-transition","stage":"review-pr","ts":"2026-07-17T22:09:39Z"}
+{"cmd":"git-pr-review","event":"command","ts":"2026-07-17T22:10:34Z"}
+{"event":"review","result":"passed","ts":"2026-07-17T22:21:21Z"}

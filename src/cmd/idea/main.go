@@ -72,6 +72,7 @@ Shorthand: "idea <text>" is equivalent to "idea add <text>".`,
 		pruneCmd(),
 		fmtCmd(),
 		updateCmd(),
+		skillCmd(),
 		newShellInitCmd(),
 		helpDumpCmd(),
 	)
