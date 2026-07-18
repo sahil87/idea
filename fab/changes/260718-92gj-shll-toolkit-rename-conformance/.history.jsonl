@@ -1,0 +1,14 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-07-18T12:13:09Z"}
+{"args":"Conform this repo to the toolkit's standardized name — shll toolkit (formerly sahil87 toolkit; sahil87/shll#56). Replace README toolkit blockquote with the new canonical line, prose-sweep sahil87 toolkit -\u003e shll toolkit across README/docs/site/fab project files, cosmetic constitution wording fix + Last Amended bump. Do not touch identifiers (sahil87/tap, github.com/sahil87 URLs, canonical-source refs). One fab change -\u003e PR.","cmd":"fab-new","event":"command","ts":"2026-07-18T12:13:09Z"}
+{"delta":"+4.9","event":"confidence","score":4.9,"trigger":"calc-score","ts":"2026-07-18T12:14:40Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-07-18T12:18:45Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-07-18T12:18:55Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-07-18T12:19:40Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-07-18T12:22:02Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-07-18T12:22:35Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-07-18T12:25:43Z"}
+{"event":"review","result":"passed","ts":"2026-07-18T12:25:43Z"}
+{"cmd":"fab-continue","event":"command","ts":"2026-07-18T12:26:23Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-07-18T12:27:50Z"}
+{"action":"enter","driver":"git-pr","event":"stage-transition","stage":"review-pr","ts":"2026-07-18T12:30:45Z"}
+{"event":"review","result":"passed","ts":"2026-07-18T12:37:31Z"}
