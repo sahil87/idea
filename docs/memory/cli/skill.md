@@ -9,7 +9,7 @@ type: memory
 
 ## Overview
 
-`idea skill` prints a static, agent-facing usage bundle to stdout. It adopts the sahil87 toolkit's `skill` standard (principle №10): an agent operating an *installed* `idea` binary has no offline usage briefing — `-h` is flag reference, README/`docs/site` needs a checkout or a shll.ai round-trip, and `fab/project` is contributor-scoped. The `skill` bundle is embedded in the binary, so it ships wherever the tool ships and is version-locked to it by construction. Added by `260717-3q43-adopt-toolkit-skill-standard`, the first repo in the toolkit to adopt the standard (there was a mechanism precedent in `shll standards`, but no `skill`-bundle content precedent to copy from).
+`idea skill` prints a static, agent-facing usage bundle to stdout. It adopts the shll toolkit's `skill` standard (principle №10): an agent operating an *installed* `idea` binary has no offline usage briefing — `-h` is flag reference, README/`docs/site` needs a checkout or a shll.ai round-trip, and `fab/project` is contributor-scoped. The `skill` bundle is embedded in the binary, so it ships wherever the tool ships and is version-locked to it by construction. Added by `260717-3q43-adopt-toolkit-skill-standard`, the first repo in the toolkit to adopt the standard (there was a mechanism precedent in `shll standards`, but no `skill`-bundle content precedent to copy from).
 
 ## Requirements
 

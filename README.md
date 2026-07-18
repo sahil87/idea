@@ -1,6 +1,6 @@
 # idea
 
-> Part of [@sahil87's open source toolkit](https://shll.ai) — see all projects there.
+> Part of the [shll toolkit](https://shll.ai) — see all projects there.
 
 [![Latest release](https://img.shields.io/github/v/release/sahil87/idea)](https://github.com/sahil87/idea/releases) [![Downloads](https://img.shields.io/github/downloads/sahil87/idea/total)](https://github.com/sahil87/idea/releases) [![Stars](https://img.shields.io/github/stars/sahil87/idea?style=social)](https://github.com/sahil87/idea/stargazers)
 
@@ -12,7 +12,7 @@ Capture and manage ideas from the command line. A worktree-aware backlog tracker
 curl -fsSL https://shll.ai/install | sh -s -- idea
 ```
 
-Installs idea (plus the shll meta-CLI) via Homebrew, handling tap trust automatically. To install the entire sahil87 toolkit instead:
+Installs idea (plus the shll meta-CLI) via Homebrew, handling tap trust automatically. To install the entire shll toolkit instead:
 
 ```sh
 curl -fsSL https://shll.ai/install | sh
@@ -51,7 +51,7 @@ eval "$(idea shell-init bash)"  # in ~/.bashrc
 
 Supports `zsh`, `bash`, `fish`, and `powershell`. Tab-completes subcommands, flags, and the `idea <text>` shorthand.
 
-> 💡 Have other sahil87 tools? [`shll shell-install`](https://github.com/sahil87/shll#shll-shell-install--wire-the-rc-file-recommended) handles all of their shell integrations and autocompletions at once.
+> 💡 Have other shll tools? [`shll shell-install`](https://github.com/sahil87/shll#shll-shell-install--wire-the-rc-file-recommended) handles all of their shell integrations and autocompletions at once.
 
 ## Quick Start
 

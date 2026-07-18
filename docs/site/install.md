@@ -63,7 +63,7 @@ idea shell-init powershell | Out-String | Invoke-Expression   # add to $PROFILE
 The zsh snippet lazy-loads `compinit` if you haven't initialised the completion
 system yet, so it's safe to drop into an rc file unconditionally.
 
-> Have other sahil87 tools? `shll shell-install` wires up the shell integrations
+> Have other shll tools? `shll shell-install` wires up the shell integrations
 > and autocompletions for **all** of them at once — see
 > [shll shell-install](https://github.com/sahil87/shll#shll-shell-install--wire-the-rc-file-recommended).
 
