@@ -5,9 +5,9 @@ type: memory
 
 # `idea list` / `ls` Subcommand
 
-`idea list` (alias `ls`) lists ideas from the backlog. The cobra wrapper lives at `src/cmd/idea/list.go` (`listCmd()` factory); the TTY/width/color/truncation logic lives in `src/internal/idea/term.go` (Constitution IV seam). Open ideas show by default; `--all/-a` adds done ideas, `--done` shows only done, `--json` emits the structured records, `--sort` (`date`|`id`) and `--reverse` order them. The `ls` alias is documented in `structure.md` (§ Command aliases). The display features below were added by `260613-kfcl-tty-aware-output-rendering`.
+`idea list` (alias `ls`) lists ideas from the backlog. The cobra wrapper lives at `src/cmd/idea/list.go` (`listCmd()` factory); the TTY/width/color/truncation logic lives in `src/internal/idea/term.go` (Constitution IV seam). Open ideas show by default; `--all/-a` adds done ideas, `--done` shows only done, `--json` emits the structured records, `--sort` (`date`|`id`) and `--reverse` order them. The `ls` alias is documented in `structure.md` (§ Command aliases).
 
-The originating DX pain: ideas in this project are frequently paragraph-length, so on a terminal they soft-wrap into many visual rows and short ideas drown between long ones — and the scannable `[id] date:` anchor is buried.
+Why truncation exists: ideas in this project are frequently paragraph-length, so untruncated terminal output soft-wraps into many visual rows, short ideas drown between long ones, and the scannable `[id] date:` anchor is buried (260613-kfcl-tty-aware-output-rendering).
 
 ## TTY-aware rendering (truncation + color)
 
@@ -61,6 +61,6 @@ The split is deliberate: a malformed argument is a *usage mistake* (caught up fr
 
 - Source-tree placement, the `ls` alias and bare-text namespace rule, the `term.go` TTY/width/color/truncation seam, and the shared `printIdeaLines` render path: `structure.md`.
 - The same TTY-aware rendering applied to the prune dry-run, plus the count header and interactive confirm: `prune.md`.
-- Command table: `../../specs/overview.md` (note: the overview still describes the pre-change `list` row).
+- Command table: `../../specs/overview.md`.
 - Constitution Principles IV (logic in `internal/idea`) and VI (machine-parseable stdout): `fab/project/constitution.md`.
 - Originating change: `260613-kfcl-tty-aware-output-rendering`.

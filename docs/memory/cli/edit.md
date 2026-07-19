@@ -5,16 +5,16 @@ type: memory
 
 # `idea edit` Subcommand
 
-`idea edit` has two forms, switched purely by the presence or absence of the text argument (`Args: cobra.RangeArgs(1, 2)` — no mode flag). The cobra wrapper lives at `src/cmd/idea/edit.go` and stays wiring-only; the editor plumbing lives at `src/internal/idea/editor.go` (Constitution Principle IV seam). The editor form was added by `260612-w4p7-edit-via-editor`; the pattern precedent is `git commit` / `kubectl edit`.
+`idea edit` has two forms, switched purely by the presence or absence of the text argument (`Args: cobra.RangeArgs(1, 2)` — no mode flag). The cobra wrapper lives at `src/cmd/idea/edit.go` and stays wiring-only; the editor plumbing lives at `src/internal/idea/editor.go` (Constitution Principle IV seam). The pattern precedent is `git commit` / `kubectl edit` (260612-w4p7-edit-via-editor).
 
 ## The two forms
 
 | Form | Behavior |
 |------|----------|
-| `idea edit <query> "text"` | Inline replacement — the quick one-liner and scripting path. Never launches an editor (tripwire-tested) and is byte-for-byte the pre-change behavior: same validation, same output. |
+| `idea edit <query> "text"` | Inline replacement — the quick one-liner and scripting path. Never launches an editor (tripwire-tested). |
 | `idea edit <query>` | Opens the resolved editor on a temp file containing the idea's **decoded** text (real newlines, real backslashes — `Idea.Text`); on clean exit the buffer is post-processed and persisted via the existing `idea.Edit`. |
 
-**Resolve before launch.** The one-arg form resolves the match via the existing `idea.Show` (LoadFile + `RequireSingle`, `FilterAll`) **before** launching the editor — an ambiguous or unmatched query is refused with the match list and the editor never opens. This reuses `idea.Edit`'s match semantics (substring, case-insensitive, ID or text) — no edit-specific resolver code was added; resolution flows entirely through the shared `RequireSingle`. The shared resolver behavior did change, though: since `260615-m2qx-exact-id-match-precedence`, `RequireSingle` applies an **exact-ID tiebreaker**: when a query produces multiple matches but exactly one of them is an exact (case-insensitive) ID match, that idea wins over incidental substring text matches instead of aborting — so `idea edit jznd` resolves cleanly even when `jznd` also appears as cross-reference text inside another idea. See `structure.md` § Query resolution for the full contract; `Match`/`FindAll` keep pure substring semantics for `list`/search.
+**Resolve before launch.** The one-arg form resolves the match via the existing `idea.Show` (LoadFile + `RequireSingle`, `FilterAll`) **before** launching the editor — an ambiguous or unmatched query is refused with the match list and the editor never opens. This reuses `idea.Edit`'s match semantics (substring, case-insensitive, ID or text) — there is no edit-specific resolver code; resolution flows entirely through the shared `RequireSingle`, which applies an **exact-ID tiebreaker**: when a query produces multiple matches but exactly one of them is an exact (case-insensitive) ID match, that idea wins over incidental substring text matches — so `idea edit jznd` resolves cleanly even when `jznd` also appears as cross-reference text inside another idea (260615-m2qx-exact-id-match-precedence). See `structure.md` § Query resolution for the full contract; `Match`/`FindAll` keep pure substring semantics for `list`/search.
 
 ## Editor resolution chain
 
@@ -42,7 +42,7 @@ type: memory
 
 The unchanged-buffer no-op is proven by tests against a backlog containing non-canonical (dateless, star-bullet) lines: the file stays byte-identical, demonstrating that skipping the rewrite really does skip the whole-file normalize-on-write.
 
-**Trailing-LF edge (closed by post-review fix).** An untouched session is now *always* a no-op, even for text that ends in an LF: unchanged-detection compares the pre-strip buffer as well as the stripped one, so the strip-one rule can no longer defeat the equality check and silently rewrite the idea minus its trailing LF. The remaining nuance is that an **edited** LF-terminated text still loses its trailing LF — the strip-one rule applies to changed buffers — and a metadata-only save (`--id`/`--date` with unchanged text) preserves the original text verbatim, trailing LF included.
+**Trailing-LF edge.** An untouched session is *always* a no-op, even for text that ends in an LF: unchanged-detection compares the pre-strip buffer as well as the stripped one, so the strip-one rule cannot defeat the equality check and silently rewrite the idea minus its trailing LF. The nuance is that an **edited** LF-terminated text still loses its trailing LF — the strip-one rule applies to changed buffers — and a metadata-only save (`--id`/`--date` with unchanged text) preserves the original text verbatim, trailing LF included.
 
 ## Output channels and persistence
 
