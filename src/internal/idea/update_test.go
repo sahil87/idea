@@ -132,10 +132,12 @@ func newBrewRecorder(recorded *[]brewCall) func(context.Context, string, ...stri
 // `brew update` refresh runs; with skip=true it is omitted, while `brew info`
 // and `brew upgrade` run in both cases.
 //
-// It also pins the no-deadline brew-safety contract (toolkit update standard):
-// every recorded brew invocation's ctx must report NO deadline, so no code
-// path can ever SIGKILL a brew subprocess mid-transaction. Reintroducing a
-// context.WithTimeout around any brew call site fails this test.
+// It also pins the no-kill-path brew-safety contract (toolkit update
+// standard): every recorded brew invocation's ctx must be non-nil, report NO
+// deadline, and be non-cancellable (Done() == nil), so no code path can ever
+// SIGKILL a brew subprocess mid-transaction. Reintroducing a
+// context.WithTimeout OR context.WithCancel around any brew call site fails
+// this test.
 func TestUpdateSkipBrewUpdate(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -172,12 +174,21 @@ func TestUpdateSkipBrewUpdate(t *testing.T) {
 				return false
 			}
 
-			// No-deadline contract: no brew subprocess may run under a
-			// deadline-carrying ctx (a deadline arms exec.CommandContext's
-			// SIGKILL cancel path, which the toolkit update standard forbids).
+			// No-kill-path contract: no brew subprocess may run under a
+			// deadline-carrying OR cancellable ctx (either arms
+			// exec.CommandContext's SIGKILL cancel path, which the toolkit
+			// update standard forbids). The nil check runs first so a
+			// regression fails cleanly instead of panicking.
 			for _, r := range recorded {
+				if r.ctx == nil {
+					t.Errorf("brew %s invoked with a nil ctx; brew subprocesses must run with context.Background()", r.sub)
+					continue
+				}
 				if deadline, ok := r.ctx.Deadline(); ok {
 					t.Errorf("brew %s invoked with a ctx deadline (%v); brew subprocesses must run with no deadline", r.sub, deadline)
+				}
+				if r.ctx.Done() != nil {
+					t.Errorf("brew %s invoked with a cancellable ctx; brew subprocesses must run with a non-cancellable ctx (no kill path)", r.sub)
 				}
 			}
 
