@@ -9,7 +9,7 @@ type: memory
 
 ## Overview
 
-`idea skill` prints a static, agent-facing usage bundle to stdout. It adopts the shll toolkit's `skill` standard (principle №10): an agent operating an *installed* `idea` binary has no offline usage briefing — `-h` is flag reference, README/`docs/site` needs a checkout or a shll.ai round-trip, and `fab/project` is contributor-scoped. The `skill` bundle is embedded in the binary, so it ships wherever the tool ships and is version-locked to it by construction. Added by `260717-3q43-adopt-toolkit-skill-standard`, the first repo in the toolkit to adopt the standard (there was a mechanism precedent in `shll standards`, but no `skill`-bundle content precedent to copy from).
+`idea skill` prints a static, agent-facing usage bundle to stdout. It adopts the shll toolkit's `skill` standard (principle №10): an agent operating an *installed* `idea` binary has no offline usage briefing — `-h` is flag reference, README/`docs/site` needs a checkout or a shll.ai round-trip, and `fab/project` is contributor-scoped. The `skill` bundle is embedded in the binary, so it ships wherever the tool ships and is version-locked to it by construction. `idea` is the first repo in the toolkit to adopt the standard — there was a mechanism precedent in `shll standards`, but no `skill`-bundle content precedent to copy from (260717-3q43-adopt-toolkit-skill-standard).
 
 ## Requirements
 
@@ -23,7 +23,7 @@ type: memory
 - **AND** `idea skill <extra-arg>` errors under `cobra.NoArgs`, and `skill` appears in `idea -h`
 
 ### Requirement: Bundle is a bounded usage briefing, not a README clone or flag table
-The canonical bundle at `docs/site/skill.md` MUST be raw Markdown, **≤150 lines** (the standard's hard budget, principle №9), in the usage-briefing genre. It MUST cover: when-to-use (and when not); a capabilities map keyed to each user-facing subcommand; composition with fab-kit via the shared backlog line format; the output/exit-code contracts documenting idea's **actual** behavior; and gotchas. (As implemented, the bundle is 95 lines.) It MUST document idea's real exit-code behavior — `0` success, `1` for every error including usage/arg errors, only `shell-init` exits `2` — and MUST state that the toolkit `0`/`1`/`2` usage-error convention is not yet implemented (deferred backlog `[xvsj]`) rather than documenting the aspirational convention, so it never lies to an agent branching on exit codes.
+The canonical bundle at `docs/site/skill.md` MUST be raw Markdown, **≤150 lines** (the standard's hard budget, principle №9), in the usage-briefing genre. It MUST cover: when-to-use (and when not); a capabilities map keyed to each user-facing subcommand; composition with fab-kit via the shared backlog line format; the output/exit-code contracts documenting idea's **actual** behavior; and gotchas. (As implemented, the bundle is 95 lines.) It MUST document idea's actual exit-code behavior — the toolkit `0`/`1`/`2` convention: `0` success, `1` operational failure, `2` usage error (260717-xvsj) — never an aspirational or outdated contract, so it never lies to an agent branching on exit codes.
 
 #### Scenario: Bundle grows past budget
 - **GIVEN** an edit that pushes `docs/site/skill.md` over 150 lines
