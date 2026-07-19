@@ -41,17 +41,20 @@ Every `brew` invocation that takes a formula argument uses the fully-qualified t
 
 The normalization also tolerates `""` and `"v"` (both → `""`) and only ever strips the first `v` (so `"vvv1.0.0"` becomes `"vv1.0.0"`).
 
-## Timeout constants
+## No-deadline brew-safety contract
 
-Three package-level constants govern subprocess wait time:
+All three brew subprocesses — `brew update --quiet`, `brew info --json=v2 sahil87/tap/idea`, and `brew upgrade sahil87/tap/idea` — run under `context.Background()`, passed at every call site through the `execCommandContext(ctx, ...)` seam. No `context.WithTimeout` (or any other deadline-carrying context) wraps a brew subprocess, and there are no timeout constants.
 
-| Constant | Duration | Subprocess |
-|----------|----------|------------|
-| `brewUpdateTimeout` | 30s | `brew update --quiet` |
-| `brewInfoTimeout` | 30s | `brew info --json=v2 sahil87/tap/idea` |
-| `brewUpgradeTimeout` | 120s | `brew upgrade sahil87/tap/idea` |
+The prohibition is a MUST-level clause of the toolkit update standard's brew-handling safety article: no code path may send `SIGKILL` to a package-manager subprocess mid-transaction, and `brew upgrade` may not carry a short hard timeout. `exec.CommandContext`'s default cancel function sends `os.Kill` (SIGKILL) when its context's deadline fires. A SIGKILL landing between brew's `unlink` and `link` steps corrupts the keg (leaving a half-installed binary — `zsh: permission denied: <tool>`), which is the exact failure the standard cites as its motivating incident. With `context.Background()` the cancel path is never armed, so `exec.CommandContext` behaves identically to `exec.Command` on the success path — no bound ever fires.
 
-Each subprocess runs under a `context.WithTimeout` derived from these constants. The 120s upgrade budget reflects that `brew upgrade` may need to download a tarball, run the formula's `test do` block, and update its own metadata. The two 30s budgets cover the metadata-only operations.
+Ctrl-C is the user's escape hatch: SIGINT reaches the foreground process group, brew traps it and unwinds cleanly. `brew upgrade` inherits the tty (`os.Stdin/Stdout/Stderr`, see I/O routing below), so a slow upgrade is visible rather than a silent hang; `brew update`/`brew info` run after the wrapper prints `Checking for updates...`, so the user knows what is running.
+
+### Design Decisions
+
+**Decision**: Remove deadlines entirely (pass `context.Background()`) rather than replace them with a generous SIGTERM+grace bound.
+**Why**: The standard's verification checklist requires "No code path sends SIGKILL to brew," which is only strictly satisfiable by having no kill path at all — Go's graceful pattern (`cmd.Cancel` = SIGTERM + `cmd.WaitDelay`) still escalates to SIGKILL once the grace elapses. The standard itself points away from bounding the call at all, and Ctrl-C remains the escape hatch. All three brew calls are treated uniformly (`brew update` and `brew info` also mutate/read tap state, so the unqualified "no SIGKILL to brew" clause applies to every call, and uniform treatment is simpler than a per-call split).
+**Rejected**: A SIGTERM + `WaitDelay` grace bound — still ends in a SIGKILL after the grace, so it fails the checklist's unqualified clause. `HOMEBREW_NO_GITHUB_API=1` — the standard suggests it only for tools that must bound the call; with no bound it is unnecessary.
+*Introduced by*: 260719-6gjq-update-version-standards-conformance
 
 ## I/O routing
 
@@ -85,7 +88,9 @@ var (
 
 `Update` and `brewLatestVersion` call `execCommandContext(...)` at all three brew call sites (`update`, `upgrade`, `info`) and `Update` calls `brewInstalled()` instead of `isBrewInstalled()` directly. In production these resolve to the stdlib function and the real detector, so runtime behavior is identical. These are NOT a command-runner abstraction or an `internal/proc` wrapper — `os/exec` remains the mechanism. The minimal seam is deliberate: refactoring the subprocess convention is explicitly out of scope, and a one-domain package does not warrant a runner interface (the same reasoning that keeps update logic in `internal/idea` rather than a separate `internal/update` package — Constitution Principle IV).
 
-Tests stub both vars (restoring them via `defer`) to force the brew path and record invocations. `TestUpdateSkipBrewUpdate` in `update_test.go` is the table-driven exercise of the flag: it sets `brewInstalled` to return `true` and `execCommandContext` to a recorder that captures each brew subcommand and re-executes the test binary with `-test.run=TestHelperProcess` (the canonical stdlib fake-exec idiom, guarded by `GO_WANT_HELPER_PROCESS=1`). The helper process fakes `brew info` with valid `--json=v2` output reporting a stable version (`9.9.9`) that differs from the test's current version so the upgrade path is taken, and exits 0 for `update`/`upgrade`. The table asserts that the flag-absent row records `update`, while both rows record `info` and `upgrade` — proving the skip omits only the tap-metadata refresh. (260531-t2ov-skip-brew-update-flag)
+Tests stub both vars (restoring them via `defer`) to force the brew path and record invocations. `TestUpdateSkipBrewUpdate` in `update_test.go` is the table-driven exercise of the flag: it sets `brewInstalled` to return `true` and `execCommandContext` to a recorder that captures a `brewCall{sub, ctx}` per invocation — the brew subcommand plus the `ctx` the call site passed through the seam — and re-executes the test binary with `-test.run=TestHelperProcess` (the canonical stdlib fake-exec idiom, guarded by `GO_WANT_HELPER_PROCESS=1`). The helper process fakes `brew info` with valid `--json=v2` output reporting a stable version (`9.9.9`) that differs from the test's current version so the upgrade path is taken, and exits 0 for `update`/`upgrade`. The table asserts that the flag-absent row records `update`, while both rows record `info` and `upgrade` — proving the skip omits only the tap-metadata refresh. (260531-t2ov-skip-brew-update-flag)
+
+The recorded `ctx` is the assertion surface for the no-deadline brew-safety contract (above): the same loop asserts every recorded brew invocation's `ctx.Deadline()` reports no deadline (`ok == false`) across both table rows and all three subcommands (`update`, `info`, `upgrade`). Reintroducing a `context.WithTimeout` around any brew call site fails this assertion. (260719-6gjq-update-version-standards-conformance)
 
 ## Cross-references
 

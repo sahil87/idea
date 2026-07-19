@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // brewFormula is the fully-qualified tap formula. The fully-qualified form
@@ -30,17 +29,23 @@ import (
 // shadow it on `brew info idea`.
 const brewFormula = "sahil87/tap/idea"
 
-const (
-	brewUpdateTimeout  = 30 * time.Second
-	brewInfoTimeout    = 30 * time.Second
-	brewUpgradeTimeout = 120 * time.Second
-)
-
 // execCommandContext and brewInstalled are indirection seams for testing.
 // Production code uses exec.CommandContext and isBrewInstalled verbatim; tests
 // stub these package-level vars to record subprocess invocations and force the
 // brew code path. They are NOT a command-runner abstraction — os/exec remains
 // the mechanism (see Design Decision 1 in the change spec).
+//
+// No-deadline brew-safety contract: every brew call site passes
+// context.Background() through this seam — never a deadline-carrying ctx. The
+// toolkit update standard forbids sending SIGKILL to a package-manager
+// subprocess mid-transaction and forbids a short hard timeout on `brew
+// upgrade`: exec.CommandContext's default cancel sends os.Kill on deadline,
+// and a SIGKILL landing between brew's unlink and link steps corrupts the keg.
+// With context.Background() the cancel path is never armed, so the seam
+// behaves identically to exec.Command. Ctrl-C remains the user's escape hatch
+// (SIGINT reaches the foreground process group; brew traps it and unwinds
+// cleanly). Do NOT reintroduce context.WithTimeout here — the ctx-deadline
+// assertion in update_test.go pins this contract.
 var (
 	execCommandContext = exec.CommandContext
 	brewInstalled      = isBrewInstalled
@@ -81,12 +86,10 @@ func Update(currentVersion string, skipBrewUpdate bool, out, errOut io.Writer) e
 	fmt.Fprintln(out, "Checking for updates...")
 
 	if !skipBrewUpdate {
-		ctx, cancel := context.WithTimeout(context.Background(), brewUpdateTimeout)
-		updateCmd := execCommandContext(ctx, "brew", "update", "--quiet")
+		updateCmd := execCommandContext(context.Background(), "brew", "update", "--quiet")
 		var updateStderr bytes.Buffer
 		updateCmd.Stderr = &updateStderr
 		err := updateCmd.Run()
-		cancel()
 		if err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
 				fmt.Fprintln(errOut, "idea update: brew not found on PATH.")
@@ -121,9 +124,7 @@ func Update(currentVersion string, skipBrewUpdate bool, out, errOut io.Writer) e
 
 	fmt.Fprintf(out, "Updating %s → v%s...\n", currentVersion, normalizeVersion(latest))
 
-	upCtx, upCancel := context.WithTimeout(context.Background(), brewUpgradeTimeout)
-	defer upCancel()
-	cmd := execCommandContext(upCtx, "brew", "upgrade", brewFormula)
+	cmd := execCommandContext(context.Background(), "brew", "upgrade", brewFormula)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -147,9 +148,7 @@ func Update(currentVersion string, skipBrewUpdate bool, out, errOut io.Writer) e
 // tap formula. Returns the bare version string (e.g. "0.0.3") with no `v`
 // prefix — that's how brew reports it in `versions.stable`.
 func brewLatestVersion() (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), brewInfoTimeout)
-	defer cancel()
-	out, err := execCommandContext(ctx, "brew", "info", "--json=v2", brewFormula).Output()
+	out, err := execCommandContext(context.Background(), "brew", "info", "--json=v2", brewFormula).Output()
 	if err != nil {
 		return "", err
 	}

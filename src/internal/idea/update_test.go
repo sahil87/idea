@@ -99,16 +99,26 @@ func TestHelperProcess(t *testing.T) {
 	os.Exit(0)
 }
 
+// brewCall records one brew invocation seen by the recorder: the brew
+// subcommand (the first arg after "brew") plus the ctx the call site passed
+// through the execCommandContext seam. Capturing the ctx is what lets the
+// tests pin the no-deadline brew-safety contract (see update.go's seam
+// comment): a reintroduced context.WithTimeout shows up as a ctx deadline.
+type brewCall struct {
+	sub string
+	ctx context.Context
+}
+
 // newBrewRecorder returns a stub matching exec.CommandContext's signature. It
-// records the brew subcommand (the args after "brew") of each invocation into
-// *recorded and returns a command that re-runs the test binary's
-// TestHelperProcess, forwarding the original brew args after a "--" separator
-// so the helper can see which subcommand was requested.
-func newBrewRecorder(recorded *[]string) func(context.Context, string, ...string) *exec.Cmd {
-	return func(_ context.Context, name string, args ...string) *exec.Cmd {
+// records each invocation's brew subcommand and ctx into *recorded and returns
+// a command that re-runs the test binary's TestHelperProcess, forwarding the
+// original brew args after a "--" separator so the helper can see which
+// subcommand was requested.
+func newBrewRecorder(recorded *[]brewCall) func(context.Context, string, ...string) *exec.Cmd {
+	return func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		// args[0] is the brew subcommand (update / upgrade / info).
 		if name == "brew" && len(args) > 0 {
-			*recorded = append(*recorded, args[0])
+			*recorded = append(*recorded, brewCall{sub: args[0], ctx: ctx})
 		}
 		helperArgs := append([]string{"-test.run=TestHelperProcess", "--", name}, args...)
 		cmd := exec.Command(os.Args[0], helperArgs...)
@@ -121,6 +131,11 @@ func newBrewRecorder(recorded *[]string) func(context.Context, string, ...string
 // stubbed and asserts which brew subcommands are spawned. With skip=false the
 // `brew update` refresh runs; with skip=true it is omitted, while `brew info`
 // and `brew upgrade` run in both cases.
+//
+// It also pins the no-deadline brew-safety contract (toolkit update standard):
+// every recorded brew invocation's ctx must report NO deadline, so no code
+// path can ever SIGKILL a brew subprocess mid-transaction. Reintroducing a
+// context.WithTimeout around any brew call site fails this test.
 func TestUpdateSkipBrewUpdate(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -139,7 +154,7 @@ func TestUpdateSkipBrewUpdate(t *testing.T) {
 				execCommandContext = origExecCommandContext
 			}()
 
-			var recorded []string
+			var recorded []brewCall
 			brewInstalled = func() bool { return true }
 			execCommandContext = newBrewRecorder(&recorded)
 
@@ -150,11 +165,20 @@ func TestUpdateSkipBrewUpdate(t *testing.T) {
 
 			has := func(sub string) bool {
 				for _, r := range recorded {
-					if r == sub {
+					if r.sub == sub {
 						return true
 					}
 				}
 				return false
+			}
+
+			// No-deadline contract: no brew subprocess may run under a
+			// deadline-carrying ctx (a deadline arms exec.CommandContext's
+			// SIGKILL cancel path, which the toolkit update standard forbids).
+			for _, r := range recorded {
+				if deadline, ok := r.ctx.Deadline(); ok {
+					t.Errorf("brew %s invoked with a ctx deadline (%v); brew subprocesses must run with no deadline", r.sub, deadline)
+				}
 			}
 
 			if !has("info") {
