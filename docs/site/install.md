@@ -1,19 +1,26 @@
 # Install
 
-The fastest way to get `idea` is the Homebrew tap. If you'd rather build from
+The fastest way to get `idea` is the [shll installer](https://shll.ai). If you'd rather build from
 source, a single `just` recipe handles it. This page covers both, plus shell
 completion and upgrades.
 
-## Homebrew tap (recommended)
+## Install via shll (recommended)
 
-```bash
-brew install sahil87/tap/idea
+```sh
+curl -fsSL https://shll.ai/install | sh -s -- idea
 ```
 
-The tap gives you a prebuilt `idea` binary on your `$PATH`, managed by Homebrew —
-so upgrades, version pinning, and uninstall all go through `brew`. This is the
-path most people want: nothing to compile, and `idea update` (see
-[Upgrading](#upgrading)) can self-upgrade through the same tap later.
+Installs idea (plus the shll meta-CLI) via Homebrew, handling tap trust
+automatically. To install the entire [shll toolkit](https://shll.ai) instead:
+
+```sh
+curl -fsSL https://shll.ai/install | sh
+```
+
+Already have `shll`? `shll install idea` does the same. Either way the binary
+is managed by Homebrew — upgrades, version pinning, and uninstall all go
+through `brew`, and `idea update` (see [Upgrading](#upgrading)) can
+self-upgrade later.
 
 ## Manual build from a clean checkout
 
