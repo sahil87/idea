@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -1364,6 +1365,41 @@ func TestRmPruneConsent_CLI(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestVersionFlag_ShapeConformance pins the toolkit version-standard contract
+// for `idea --version`: the exit-0 path (nil error from Execute), output on
+// stdout with stderr empty, and the version line FIRST — nothing (no banner)
+// precedes it — matching the `<word> version <rest>` prefix shape that shll's
+// first-line-only parse expects. Dev builds emit "idea version dev"; release
+// builds emit "idea version vX.Y.Z" — both satisfy `^idea version \S+$`.
+// Executed in-process via newRootCmd() (cobra prints the version template to
+// OutOrStdout before any RunE), following the TestConfirmPrune pattern.
+func TestVersionFlag_ShapeConformance(t *testing.T) {
+	cmd := newRootCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"--version"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("--version returned err: %v\nstdout=%q stderr=%q", err, stdout.String(), stderr.String())
+	}
+	if got := stderr.String(); got != "" {
+		t.Errorf("--version wrote to stderr: %q", got)
+	}
+
+	out := stdout.String()
+	if out == "" {
+		t.Fatal("--version produced no stdout output")
+	}
+	// Line 1 must BE the version line — asserting the first line (not merely
+	// the first non-empty line) also pins that no banner precedes it.
+	firstLine := strings.SplitN(out, "\n", 2)[0]
+	versionRE := regexp.MustCompile(`^idea version \S+$`)
+	if !versionRE.MatchString(firstLine) {
+		t.Errorf("--version line 1 = %q, want match for %q (full stdout: %q)", firstLine, versionRE.String(), out)
 	}
 }
 
