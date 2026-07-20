@@ -1,6 +1,6 @@
 # Install
 
-The fastest way to get `idea` is the shll installer. If you'd rather build from
+The fastest way to get `idea` is the [shll installer](https://shll.ai). If you'd rather build from
 source, a single `just` recipe handles it. This page covers both, plus shell
 completion and upgrades.
 
