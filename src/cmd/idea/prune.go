@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sahil87/idea/internal/idea"
 	"github.com/spf13/cobra"
@@ -63,7 +64,7 @@ system backlog is used automatically.
 			// human sees the action first regardless of list length; stdout
 			// still carries exactly the removable lines (pipe-friendly).
 			fmt.Fprintf(cmd.ErrOrStderr(), "%d done idea(s) would be pruned\n", len(pruned))
-			printIdeaLines(cmd.OutOrStdout(), pruned, full)
+			printIdeaLines(cmd.OutOrStdout(), pruned, full, idea.NoStaleDim, time.Now())
 
 			// Interactive confirm only when stdout is a TTY (a prompt on a pipe
 			// would hang). On a TTY the prompt replaces the trailing hint; on a

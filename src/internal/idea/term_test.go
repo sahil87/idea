@@ -106,6 +106,7 @@ func TestDisplayListLine(t *testing.T) {
 		width int
 		full  bool
 		color bool
+		stale bool
 		want  string
 	}{
 		{
@@ -143,7 +144,7 @@ func TestDisplayListLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := DisplayListLine(tt.idea, tt.width, tt.full, tt.color)
+			got := DisplayListLine(tt.idea, tt.width, tt.full, tt.color, tt.stale)
 			if got != tt.want {
 				t.Errorf("DisplayListLine() =\n  %q\nwant\n  %q", got, tt.want)
 			}
@@ -159,7 +160,7 @@ func TestDisplayListLine_RuneSafe(t *testing.T) {
 	i := Idea{ID: "ab12", Date: "2026-06-01", Text: "日本語版あ"}
 	prefixLen := len([]rune("- [ ] [ab12] 2026-06-01: "))
 
-	got := DisplayListLine(i, prefixLen+3, false, false) // keep 2 runes + ellipsis
+	got := DisplayListLine(i, prefixLen+3, false, false, false) // keep 2 runes + ellipsis
 	if !utf8.ValidString(got) {
 		t.Fatalf("output is not valid UTF-8: %q", got)
 	}
@@ -178,8 +179,8 @@ func TestDisplayListLine_ColorAfterTruncation(t *testing.T) {
 	prefixLen := len([]rune("- [x] [ab12] 2026-06-01: "))
 	width := prefixLen + 4
 
-	colored := DisplayListLine(i, width, false, true)
-	plain := DisplayListLine(i, width, false, false)
+	colored := DisplayListLine(i, width, false, true, false)
+	plain := DisplayListLine(i, width, false, false, false)
 
 	if !strings.Contains(colored, ansiGreen) {
 		t.Errorf("expected green code for done checkbox, got %q", colored)
@@ -189,6 +190,96 @@ func TestDisplayListLine_ColorAfterTruncation(t *testing.T) {
 	}
 	if stripped := stripANSI(colored); stripped != plain {
 		t.Errorf("ANSI-stripped colored line = %q, want %q (color must not change visible text)", stripped, plain)
+	}
+}
+
+// TestDisplayListLine_Stale verifies whole-line faint rendering for stale
+// ideas: with color on and stale true, the text portion joins the dimmed
+// prefix spans, and a done [x] keeps its green (state signal outranks the age
+// hint). Dimming is applied after truncation, so ANSI-stripping still yields
+// the plain truncated line. With color off (non-TTY/NO_COLOR) stale emits no
+// escape codes at all.
+func TestDisplayListLine_Stale(t *testing.T) {
+	open := Idea{ID: "ab12", Date: "2026-06-01", Text: "old idea"}
+	done := Idea{ID: "cd34", Date: "2026-06-01", Text: "old done idea", Done: true}
+
+	tests := []struct {
+		name      string
+		idea      Idea
+		width     int
+		full      bool
+		color     bool
+		stale     bool
+		want      string
+		wantCodes []string
+		noCodes   []string
+	}{
+		{
+			name:      "stale + color: text portion is faint-wrapped",
+			idea:      open,
+			width:     80,
+			color:     true,
+			stale:     true,
+			want:      dimPrefix("- ") + "[ ]" + dimPrefix(" [ab12] 2026-06-01: ") + dimPrefix("old idea"),
+			wantCodes: []string{ansiFaint},
+			noCodes:   []string{ansiGreen},
+		},
+		{
+			name:      "stale done keeps the green checkbox",
+			idea:      done,
+			width:     80,
+			color:     true,
+			stale:     true,
+			want:      dimPrefix("- ") + greenCheck("[x]") + dimPrefix(" [cd34] 2026-06-01: ") + dimPrefix("old done idea"),
+			wantCodes: []string{ansiFaint, ansiGreen},
+		},
+		{
+			name:      "not stale + color: text is NOT faint",
+			idea:      open,
+			width:     80,
+			color:     true,
+			stale:     false,
+			want:      dimPrefix("- ") + "[ ]" + dimPrefix(" [ab12] 2026-06-01: ") + "old idea",
+			wantCodes: []string{ansiFaint},
+		},
+		{
+			name:    "stale without color emits no codes",
+			idea:    open,
+			width:   80,
+			color:   false,
+			stale:   true,
+			want:    "- [ ] [ab12] 2026-06-01: old idea",
+			noCodes: []string{ansiFaint, ansiGreen, ansiReset},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DisplayListLine(tt.idea, tt.width, tt.full, tt.color, tt.stale)
+			if got != tt.want {
+				t.Errorf("DisplayListLine() = %q, want %q", got, tt.want)
+			}
+			for _, code := range tt.wantCodes {
+				if !strings.Contains(got, code) {
+					t.Errorf("expected %q in %q", code, got)
+				}
+			}
+			for _, code := range tt.noCodes {
+				if strings.Contains(got, code) {
+					t.Errorf("did not expect %q in %q", code, got)
+				}
+			}
+		})
+	}
+
+	// Dimming is applied after truncation: a clipped stale line ANSI-strips to
+	// the same visible bytes as its plain render.
+	i := Idea{ID: "ab12", Date: "2026-06-01", Text: "abcdefghij"}
+	prefixLen := len([]rune("- [ ] [ab12] 2026-06-01: "))
+	staleColored := DisplayListLine(i, prefixLen+4, false, true, true)
+	stalePlain := DisplayListLine(i, prefixLen+4, false, false, true)
+	if stripped := stripANSI(staleColored); stripped != stalePlain {
+		t.Errorf("ANSI-stripped stale line = %q, want %q (dim after truncation)", stripped, stalePlain)
 	}
 }
 

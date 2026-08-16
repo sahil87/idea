@@ -92,8 +92,10 @@ func greenCheck(s string) string {
 // width is the terminal column count (a parameter so tests inject it rather
 // than allocating a PTY). When color is true the prefix is dimmed and a done
 // [x] checkbox is greened — applied AFTER truncation so the width math counts
-// visible runes, not escape bytes.
-func DisplayListLine(i Idea, width int, full, color bool) string {
+// visible runes, not escape bytes. When stale is also true the whole line
+// (text included) renders faint so aged ideas visually recede; a done [x]
+// keeps its green — the explicit state signal outranks the age hint.
+func DisplayListLine(i Idea, width int, full, color, stale bool) string {
 	check := i.StatusCheck()
 	// The prefix mirrors formatLineWith up to (and including) the "text"
 	// position: "- [<check>] [<id>] <date>: ".
@@ -116,6 +118,11 @@ func DisplayListLine(i Idea, width int, full, color bool) string {
 	// when done. Rebuild the prefix in two dim spans around the checkbox so the
 	// id/date stay faint while the [x] stays green.
 	styledPrefix := dimPrefix("- ") + styledCheck + dimPrefix(" ["+i.ID+"] "+i.Date+": ")
+	if stale {
+		// Whole-line faint: the (already-truncated) text joins the dim spans.
+		// A done [x] is untouched above, so it stays green — state outranks age.
+		text = dimPrefix(text)
+	}
 	return styledPrefix + text
 }
 

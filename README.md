@@ -88,7 +88,7 @@ Queries (the `<id>` arg on `show`, `done`, `reopen`, `edit`, `rm`) match against
 |---------|---------|
 | `idea "text"` | Add a new idea (shorthand for `idea add`). |
 | `idea add "text"` | Add a new idea to the backlog. |
-| `idea list` | List open ideas. `--all` includes done items, `--done` only done, `--json` for scripting, `--sort id\|date`, `--reverse`. |
+| `idea list` | List open ideas. `--all` includes done items, `--done` only done, `--json` for scripting, `--sort id\|date`, `--reverse`, `--stale 90d` filters to open ideas older than N days. |
 | `idea show <query>` | Show a single idea matching the query (by ID or substring). |
 | `idea done <query>` | Mark an idea as done. |
 | `idea reopen <query>` | Reopen a completed idea. |
