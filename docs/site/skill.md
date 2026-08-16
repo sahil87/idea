@@ -69,10 +69,12 @@ change. Keep IDs stable — external scripts and `/fab-new` key on them.
 - **`--json`** exists on `list` and `show` **only**. Schema per record: `{id, date, status, text}`
   with `status: "open"|"done"` (never a boolean). `list --json` is an array; an empty/absent backlog
   yields `[]`.
-- **Exit codes (actual behavior today): `0` on success, `1` for every error including usage/arg
-  errors. Only `shell-init` exits `2`** (missing/unsupported shell arg). The toolkit's `0`/`1`/`2`
-  usage-error convention is **not yet implemented** here (deferred, backlog `[xvsj]`) — branch on
-  `0` vs non-zero, not on `2` meaning "usage error".
+- **Exit codes follow the toolkit convention: `0` success, `1` operational failure, `2` usage
+  error.** Malformed invocations exit `2` — unknown flags, wrong argument counts, a missing or
+  unsupported `shell-init` shell, and the `--system`+`--main` conflict. Well-formed invocations
+  that fail exit `1` — consent refusals (`rm`/`prune` without `--yes`), no-match or ambiguous
+  queries, `fmt --check` on a non-canonical file, and I/O failures. Branching on `2` to detect
+  usage errors is supported.
 
 ## Gotchas
 

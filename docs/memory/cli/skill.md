@@ -23,7 +23,7 @@ type: memory
 - **AND** `idea skill <extra-arg>` errors under `cobra.NoArgs`, and `skill` appears in `idea -h`
 
 ### Requirement: Bundle is a bounded usage briefing, not a README clone or flag table
-The canonical bundle at `docs/site/skill.md` MUST be raw Markdown, **≤150 lines** (the standard's hard budget, principle №9), in the usage-briefing genre. It MUST cover: when-to-use (and when not); a capabilities map keyed to each user-facing subcommand; composition with fab-kit via the shared backlog line format; the output/exit-code contracts documenting idea's **actual** behavior; and gotchas. (As implemented, the bundle is 95 lines.) It MUST document idea's actual exit-code behavior — the toolkit `0`/`1`/`2` convention: `0` success, `1` operational failure, `2` usage error (260717-xvsj) — never an aspirational or outdated contract, so it never lies to an agent branching on exit codes.
+The canonical bundle at `docs/site/skill.md` MUST be raw Markdown, **≤150 lines** (the standard's hard budget, principle №9), in the usage-briefing genre. It MUST cover: when-to-use (and when not); a capabilities map keyed to each user-facing subcommand; composition with fab-kit via the shared backlog line format; the output/exit-code contracts documenting idea's **actual** behavior; and gotchas. (As implemented, the bundle is 97 lines.) It MUST document idea's actual exit-code behavior — the toolkit `0`/`1`/`2` convention: `0` success, `1` operational failure, `2` usage error (260717-xvsj) — never an aspirational or outdated contract, so it never lies to an agent branching on exit codes.
 
 #### Scenario: Bundle grows past budget
 - **GIVEN** an edit that pushes `docs/site/skill.md` over 150 lines
