@@ -70,7 +70,11 @@ func Promote(srcPath, dstPath, query string) (Idea, int, int, error) {
 	removeIdeaAt(src, idx)
 	srcBackfilled, err := SaveFile(src, srcPath)
 	if err != nil {
-		return Idea{}, 0, 0, err
+		// The destination write already succeeded, so the idea is now
+		// duplicated (present in both files) — say so explicitly, because a
+		// blind retry hits the destination ID-collision guard until the
+		// source copy is removed.
+		return Idea{}, 0, 0, fmt.Errorf("idea '%s' was added to %s, but removing it from %s failed: %w — remove it from the source manually, then verify with 'idea list'", idea.ID, dstPath, srcPath, err)
 	}
 
 	// Return the idea as it landed in the destination (date backfilled).
