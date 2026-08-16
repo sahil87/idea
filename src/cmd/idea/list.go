@@ -32,8 +32,8 @@ cannot be combined with --done or --all.
 
 On a terminal, long idea text is truncated to fit the width (the [id] date:
 prefix is never clipped) and the prefix is dimmed; --full shows the complete
-text. Ideas older than the effective staleness threshold (the --stale value
-when passed, else 90 days) render entirely faint. When the output is piped or
+text. Open ideas older than the effective staleness threshold (the --stale
+value when passed, else 90 days) render entirely faint. When the output is piped or
 redirected, full canonical lines are emitted regardless of --full so downstream
 tools see machine-parseable records. As with every backlog command, --main
 targets the main worktree's backlog, --system targets the system-level backlog

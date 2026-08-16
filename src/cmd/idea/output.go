@@ -17,12 +17,15 @@ import (
 // emitted regardless of full, preserving the machine-parseable pipe contract
 // (Constitution VI).
 //
-// staleDays is the age-dimming threshold: on a color terminal, ideas stale per
-// idea.IsStale (strictly older than today − staleDays) render whole-line
-// faint. Pass idea.NoStaleDim to disable dimming entirely (prune does — its
-// listing is a consent surface, not a review surface). Piped output is never
-// dimmed either way. today is passed explicitly so the staleness clock matches
-// the caller's filter pass.
+// staleDays is the age-dimming threshold: on a color terminal, OPEN ideas
+// stale per idea.IsStale (strictly older than today − staleDays) render
+// whole-line faint. Done ideas are never age-dimmed — the dimming is an
+// open-idea review signal (done ideas are prune's business), so a done idea
+// listed via --done/--all keeps its normal rendering however old it is. Pass
+// idea.NoStaleDim to disable dimming entirely (prune does — its listing is a
+// consent surface, not a review surface). Piped output is never dimmed either
+// way. today is passed explicitly so the staleness clock matches the caller's
+// filter pass.
 //
 // The TTY/width/color decision keys on os.Stdout (the real destination) while
 // out is the write target — out is normally os.Stdout in production and a
@@ -33,7 +36,7 @@ func printIdeaLines(out io.Writer, ideas []idea.Idea, full bool, staleDays int, 
 		width := idea.TermWidth(os.Stdout)
 		color := idea.UseColor(os.Stdout)
 		for _, i := range ideas {
-			stale := staleDays != idea.NoStaleDim && idea.IsStale(i, staleDays, today)
+			stale := staleDays != idea.NoStaleDim && !i.Done && idea.IsStale(i, staleDays, today)
 			fmt.Fprintln(out, idea.DisplayListLine(i, width, full, color, stale))
 		}
 		return

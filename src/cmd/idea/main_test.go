@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/sahil87/idea/internal/idea"
 )
@@ -837,17 +836,16 @@ func TestList_PipedOutputIsCanonical(t *testing.T) {
 func TestList_Stale(t *testing.T) {
 	bin := buildBinary(t)
 
-	// The fixture dates are computed against the same "today" the binary sees:
-	// two ancient ideas (always stale), one dated exactly today−90 (the --stale
-	// 90 cutoff — the same-day boundary, NOT stale), one dated today (fresh),
-	// and one done ancient idea (unreachable — --stale is open-only).
-	today := time.Now()
-	boundary := today.AddDate(0, 0, -90).Format("2006-01-02")
+	// All fixture dates are fixed and far from any plausible "today" (far past
+	// for stale, far future for fresh) so the seeded backlog never depends on
+	// the test process and the binary agreeing on the wall clock — the two call
+	// time.Now() independently, and today-relative fixtures would flake across
+	// a midnight boundary. The exact same-day boundary semantics are pinned by
+	// the internal/idea unit tests, which inject a fixed clock.
 	seed := "# Backlog\n\n" +
 		"- [ ] [old1] 2020-01-01: ancient one\n" +
 		"- [ ] [old2] 2019-06-01: ancient two\n" +
-		"- [ ] [edge] " + boundary + ": boundary idea\n" +
-		"- [ ] [new1] " + today.Format("2006-01-02") + ": fresh idea\n" +
+		"- [ ] [new1] 2099-01-01: far-future fresh idea\n" +
 		"- [x] [d0ne] 2018-01-01: done ancient\n"
 
 	// Default sort is date ascending, so the stale set is old2 (2019) then
@@ -869,18 +867,12 @@ func TestList_Stale(t *testing.T) {
 			name:       "90d filters to strictly-older open ideas",
 			args:       []string{"list", "--stale", "90d"},
 			wantStdout: staleDateOrder,
-			noStdout:   []string{"edge", "new1", "d0ne"},
+			noStdout:   []string{"new1", "d0ne"},
 		},
 		{
 			name:       "bare 90 parses like 90d",
 			args:       []string{"ls", "--stale", "90"},
 			wantStdout: staleDateOrder,
-		},
-		{
-			name: "same-day boundary is not stale",
-			args: []string{"list", "--stale", "89d"},
-			wantStdout: staleDateOrder +
-				"- [ ] [edge] " + boundary + ": boundary idea\n",
 		},
 		{
 			name: "--sort id applies to the filtered set",
@@ -914,11 +906,10 @@ func TestList_Stale(t *testing.T) {
 			wantStdout: "- [ ] [long] 2020-01-01: " + strings.Repeat("x", 300) + "\n",
 		},
 		{
-			name: "zero threshold keeps everything older than today",
-			args: []string{"list", "--stale", "0"},
-			wantStdout: staleDateOrder +
-				"- [ ] [edge] " + boundary + ": boundary idea\n",
-			noStdout: []string{"new1", "d0ne"},
+			name:       "zero threshold keeps everything older than today",
+			args:       []string{"list", "--stale", "0"},
+			wantStdout: staleDateOrder,
+			noStdout:   []string{"new1", "d0ne"},
 		},
 		{
 			name:       "--stale with --done is a usage error",
@@ -998,10 +989,11 @@ func TestList_Stale(t *testing.T) {
 func TestList_StaleJSON(t *testing.T) {
 	bin := buildBinary(t)
 	repo := setupGitRepo(t)
-	today := time.Now().Format("2006-01-02")
+	// Fixed far-past/far-future dates keep the fixture independent of the wall
+	// clock (see TestList_Stale's seed comment).
 	writeRepoBacklog(t, repo, "# Backlog\n\n"+
 		"- [ ] [old1] 2020-01-01: ancient idea\n"+
-		"- [ ] [new1] "+today+": fresh idea\n"+
+		"- [ ] [new1] 2099-01-01: far-future fresh idea\n"+
 		"- [x] [d0ne] 2018-01-01: done ancient\n")
 
 	stdout, _, err := runSplit(t, bin, repo, "list", "--stale", "90d", "--json")
