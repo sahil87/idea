@@ -9,8 +9,8 @@ progress:
     apply: done
     review: done
     hydrate: done
-    ship: active
-    review-pr: pending
+    ship: done
+    review-pr: active
 plan:
     generated: true
     task_count: 6
@@ -33,23 +33,25 @@ stage_metrics:
     apply: {started_at: "2026-08-16T20:45:21Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T21:03:58Z"}
     review: {started_at: "2026-08-16T21:03:58Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T21:09:03Z"}
     hydrate: {started_at: "2026-08-16T21:09:03Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T21:14:13Z"}
-    ship: {started_at: "2026-08-16T21:14:13Z", driver: fab-fff, iterations: 1}
-prs: []
+    ship: {started_at: "2026-08-16T21:14:13Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T21:17:40Z"}
+    review-pr: {started_at: "2026-08-16T21:17:40Z", driver: git-pr, iterations: 1}
+prs:
+    - https://github.com/sahil87/idea/pull/47
 change_type_source: explicit
 true_impact:
-    added: 0
-    deleted: 0
-    net: 0
+    added: 923
+    deleted: 39
+    net: 884
     excluding:
-        added: 0
-        deleted: 0
-        net: 0
+        added: 528
+        deleted: 19
+        net: 509
     tests:
-        added: 0
-        deleted: 0
-        net: 0
-    computed_at: "2026-08-16T21:14:13Z"
-    computed_at_stage: hydrate
+        added: 388
+        deleted: 4
+        net: 384
+    computed_at: "2026-08-16T21:17:40Z"
+    computed_at_stage: ship
 summary: Add idea list --stale days filter (open-only, strictly-older-than) and TTY-only whole-line age dimming (90d default threshold, prune unaffected); document in cli/list.md + cli/structure.md
 # true_impact: lazily created on first stage-finish that computes it (no placeholder here).
-last_updated: 2026-08-16T21:14:13Z
+last_updated: 2026-08-16T21:17:40Z
