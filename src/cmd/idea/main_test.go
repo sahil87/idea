@@ -1601,6 +1601,247 @@ func TestVersionFlag_ShapeConformance(t *testing.T) {
 	}
 }
 
+// --- Promote (linked worktree → main worktree) ---
+
+// setupLinkedWorktree creates a real git repo with one committed seed and a
+// linked worktree checked out beside it, returning (main, linked) roots. The
+// linked worktree starts without a fab/ directory (the seed backlog is
+// uncommitted), so tests write the source backlog explicitly.
+func setupLinkedWorktree(t *testing.T) (mainRepo, linked string) {
+	t.Helper()
+	mainRepo = setupGitRepo(t)
+	run(t, mainRepo, "git", "commit", "--allow-empty", "-m", "seed")
+	linked = filepath.Join(t.TempDir(), "linked")
+	run(t, mainRepo, "git", "worktree", "add", linked)
+	return mainRepo, linked
+}
+
+// TestPromote_LinkedWorktreeCLI covers the promote contract end to end
+// against a real git repo + linked worktree (Constitution V): the happy-path
+// move, done-status preservation, the destination collision refusal, and the
+// flag-conflict usage errors. Exit codes are asserted via exitCodeOf so the
+// 0/1/2 classification is pinned, not just success/failure.
+func TestPromote_LinkedWorktreeCLI(t *testing.T) {
+	bin := buildBinary(t)
+
+	const mainSeed = "# Backlog\n\n- [ ] [m4in] 2026-06-01: main resident\n"
+	const worktreeSeed = "# Backlog\n\n- [ ] [a7k2] 2026-06-02: captured in the worktree\n- [ ] [b8k3] 2026-06-03: stays local\n"
+
+	tests := []struct {
+		name string
+		// worktreeBacklog overrides worktreeSeed when non-empty.
+		worktreeBacklog string
+		args            []string
+		wantExit        int
+		// wantStdout is the exact expected stdout on the success path.
+		wantStdout string
+		// wantStderr lists required stderr substrings.
+		wantStderr []string
+		// wantMain / wantWorktree are the expected backlog contents after the
+		// run; "" means byte-identical to the seed.
+		wantMain     string
+		wantWorktree string
+	}{
+		{
+			name:         "happy path moves the idea to the main backlog",
+			args:         []string{"promote", "a7k2"},
+			wantExit:     0,
+			wantStdout:   "Promoted: - [ ] [a7k2] 2026-06-02: captured in the worktree\n",
+			wantMain:     "# Backlog\n\n- [ ] [m4in] 2026-06-01: main resident\n- [ ] [a7k2] 2026-06-02: captured in the worktree\n",
+			wantWorktree: "# Backlog\n\n- [ ] [b8k3] 2026-06-03: stays local\n",
+		},
+		{
+			name:            "done idea arrives done in the main backlog",
+			worktreeBacklog: "- [x] [d0ne] 2026-06-02: finished in the worktree\n",
+			args:            []string{"promote", "d0ne"},
+			wantExit:        0,
+			wantStdout:      "Promoted: - [x] [d0ne] 2026-06-02: finished in the worktree\n",
+			wantMain:        "# Backlog\n\n- [ ] [m4in] 2026-06-01: main resident\n- [x] [d0ne] 2026-06-02: finished in the worktree\n",
+			wantWorktree:    "\n",
+		},
+		{
+			name:         "substring query resolves and moves",
+			args:         []string{"promote", "captured"},
+			wantExit:     0,
+			wantStdout:   "Promoted: - [ ] [a7k2] 2026-06-02: captured in the worktree\n",
+			wantMain:     "# Backlog\n\n- [ ] [m4in] 2026-06-01: main resident\n- [ ] [a7k2] 2026-06-02: captured in the worktree\n",
+			wantWorktree: "# Backlog\n\n- [ ] [b8k3] 2026-06-03: stays local\n",
+		},
+		{
+			name:         "no match is an operational error, nothing written",
+			args:         []string{"promote", "zzzz"},
+			wantExit:     1,
+			wantStderr:   []string{"No idea matching 'zzzz'"},
+			wantMain:     "",
+			wantWorktree: "",
+		},
+		{
+			name:       "--main is a usage error",
+			args:       []string{"promote", "a7k2", "--main"},
+			wantExit:   2,
+			wantStderr: []string{"--main"},
+		},
+		{
+			name:       "--system is a usage error",
+			args:       []string{"promote", "a7k2", "--system"},
+			wantExit:   2,
+			wantStderr: []string{"--system"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mainRepo, linked := setupLinkedWorktree(t)
+			writeRepoBacklog(t, mainRepo, mainSeed)
+			worktreeBacklog := tt.worktreeBacklog
+			if worktreeBacklog == "" {
+				worktreeBacklog = worktreeSeed
+			}
+			if err := os.MkdirAll(filepath.Join(linked, "fab"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			writeRepoBacklog(t, linked, worktreeBacklog)
+
+			stdout, stderr, err := runSplit(t, bin, linked, tt.args...)
+			if got := exitCodeOf(t, err); got != tt.wantExit {
+				t.Fatalf("exit code = %d, want %d\nstdout=%q stderr=%q", got, tt.wantExit, stdout, stderr)
+			}
+			if tt.wantStdout != "" && stdout != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			for _, sub := range tt.wantStderr {
+				if !strings.Contains(stderr, sub) {
+					t.Errorf("stderr = %q, want substring %q", stderr, sub)
+				}
+			}
+
+			wantMain := tt.wantMain
+			if wantMain == "" {
+				wantMain = mainSeed
+			}
+			if got := readRepoBacklog(t, mainRepo); got != wantMain {
+				t.Errorf("main backlog:\ngot:\n%s\nwant:\n%s", got, wantMain)
+			}
+			wantWorktree := tt.wantWorktree
+			if wantWorktree == "" {
+				wantWorktree = worktreeBacklog
+			}
+			if got := readRepoBacklog(t, linked); got != wantWorktree {
+				t.Errorf("worktree backlog:\ngot:\n%s\nwant:\n%s", got, wantWorktree)
+			}
+		})
+	}
+}
+
+// TestPromote_DestinationCollisionCLI pins the collision refusal end to end:
+// exit 1, an error naming the ID, and both backlogs byte-identical.
+func TestPromote_DestinationCollisionCLI(t *testing.T) {
+	bin := buildBinary(t)
+	mainRepo, linked := setupLinkedWorktree(t)
+
+	const mainSeed = "# Backlog\n\n- [ ] [a7k2] 2026-06-01: already in main\n"
+	const worktreeSeed = "# Backlog\n\n- [ ] [a7k2] 2026-06-02: worktree copy\n"
+	writeRepoBacklog(t, mainRepo, mainSeed)
+	if err := os.MkdirAll(filepath.Join(linked, "fab"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeRepoBacklog(t, linked, worktreeSeed)
+
+	_, stderr, err := runSplit(t, bin, linked, "promote", "a7k2")
+	if got := exitCodeOf(t, err); got != 1 {
+		t.Fatalf("exit code = %d, want 1\nstderr=%q", got, stderr)
+	}
+	if !strings.Contains(stderr, "a7k2") || !strings.Contains(stderr, "already exists") {
+		t.Errorf("stderr should name the colliding ID, got: %q", stderr)
+	}
+	if got := readRepoBacklog(t, mainRepo); got != mainSeed {
+		t.Errorf("main backlog modified on refusal:\n%s", got)
+	}
+	if got := readRepoBacklog(t, linked); got != worktreeSeed {
+		t.Errorf("worktree backlog modified on refusal:\n%s", got)
+	}
+}
+
+// TestPromote_AlreadyInMainNoOp pins the same-path no-op: run from the main
+// worktree, promote exits 0 with a stderr note and touches nothing.
+func TestPromote_AlreadyInMainNoOp(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+	const seed = "# Backlog\n\n- [ ] [ab12] 2026-06-01: seeded idea\n"
+	writeRepoBacklog(t, repo, seed)
+
+	stdout, stderr, err := runSplit(t, bin, repo, "promote", "ab12")
+	if err != nil {
+		t.Fatalf("promote in main worktree failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty on no-op", stdout)
+	}
+	if !strings.Contains(stderr, "note:") {
+		t.Errorf("expected a note: advisory on stderr, got %q", stderr)
+	}
+	if got := readRepoBacklog(t, repo); got != seed {
+		t.Errorf("backlog modified by the no-op:\n%s", got)
+	}
+}
+
+// TestPromote_OutsideGitFails pins the operational refusal outside any git
+// repository: the main-worktree resolution is git-only, so promote exits 1
+// with the git-resolution error instead of falling back to the system backlog.
+func TestPromote_OutsideGitFails(t *testing.T) {
+	bin := buildBinary(t)
+	nonGit := t.TempDir()
+	env, _, _ := systemEnv(t)
+
+	_, stderr, err := runSplitEnv(t, bin, nonGit, env, "promote", "a7k2")
+	if got := exitCodeOf(t, err); got != 1 {
+		t.Fatalf("exit code = %d, want 1\nstderr=%q", got, stderr)
+	}
+	if !strings.Contains(stderr, "not in a git repository") {
+		t.Errorf("expected the git-resolution error, got: %q", stderr)
+	}
+}
+
+// TestPromote_FileFlagAppliesWithinEachRoot pins that --file composes with
+// promote's fixed roots: the same relative override resolves under the current
+// worktree (source) and the main worktree (destination).
+func TestPromote_FileFlagAppliesWithinEachRoot(t *testing.T) {
+	bin := buildBinary(t)
+	mainRepo, linked := setupLinkedWorktree(t)
+
+	const src = "- [ ] [a7k2] 2026-06-02: captured in the worktree\n"
+	srcPath := filepath.Join(linked, "custom.md")
+	if err := os.WriteFile(srcPath, []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, err := runSplit(t, bin, linked, "promote", "--file", "custom.md", "a7k2")
+	if err != nil {
+		t.Fatalf("promote --file failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	want := "Promoted: - [ ] [a7k2] 2026-06-02: captured in the worktree\n"
+	if stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+	if got := readFileAt(t, filepath.Join(mainRepo, "custom.md")); got != src {
+		t.Errorf("main custom.md:\ngot:\n%s\nwant:\n%s", got, src)
+	}
+	if got := readFileAt(t, srcPath); got != "\n" {
+		t.Errorf("worktree custom.md:\ngot: %q\nwant empty canonical file", got)
+	}
+}
+
+// readFileAt reads a file or fails the test (the cmd-package counterpart of
+// the promote_test.go helper).
+func readFileAt(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
 // exitCodeOf extracts the process exit code from an error returned by
 // runSplit/runSplitEnv (cmd.Run). It returns 0 for a nil error (success) and
 // fails the test if the error is not an *exec.ExitError (e.g. the binary could
@@ -1633,6 +1874,8 @@ func TestExitCodes_UsageVsOperationalVsSuccess(t *testing.T) {
 		name     string
 		backlog  string // overrides seed when non-empty
 		args     []string
+		linked   bool // run from a linked worktree (seeded with backlog/seed) instead of the main repo
+		nonGit   bool // run outside any git repository
 		wantExit int
 	}{
 		// Usage -> 2
@@ -1643,9 +1886,15 @@ func TestExitCodes_UsageVsOperationalVsSuccess(t *testing.T) {
 		{name: "skill extra arg", args: []string{"skill", "extra"}, wantExit: 2},
 		{name: "edit missing arg", args: []string{"edit"}, wantExit: 2},
 		{name: "system+main conflict", args: []string{"-s", "-m", "list"}, wantExit: 2},
+		{name: "promote missing arg", args: []string{"promote"}, wantExit: 2},
+		{name: "promote with --main", args: []string{"promote", "ab12", "--main"}, wantExit: 2},
+		{name: "promote with --system", args: []string{"promote", "ab12", "--system"}, wantExit: 2},
 		// Operational -> 1
 		{name: "no-match query", args: []string{"done", "zzzz"}, wantExit: 1},
 		{name: "rm without consent", args: []string{"rm", "ab12"}, wantExit: 1},
+		{name: "promote no match", args: []string{"promote", "zzzz"}, linked: true, wantExit: 1},
+		{name: "promote destination collision", args: []string{"promote", "ab12"}, linked: true, wantExit: 1},
+		{name: "promote outside git", args: []string{"promote", "ab12"}, nonGit: true, wantExit: 1},
 		{
 			name:     "fmt --check non-canonical",
 			backlog:  "- [ ] [cd34] dateless (non-canonical) idea\n",
@@ -1654,6 +1903,8 @@ func TestExitCodes_UsageVsOperationalVsSuccess(t *testing.T) {
 		},
 		// Success -> 0
 		{name: "list happy path", args: []string{"list"}, wantExit: 0},
+		{name: "promote in main worktree is a no-op", args: []string{"promote", "ab12"}, wantExit: 0},
+		{name: "promote happy path", args: []string{"promote", "cd34"}, linked: true, wantExit: 0},
 	}
 
 	for _, tt := range tests {
@@ -1665,7 +1916,24 @@ func TestExitCodes_UsageVsOperationalVsSuccess(t *testing.T) {
 			}
 			writeRepoBacklog(t, repo, content)
 
-			_, _, err := runSplit(t, bin, repo, tt.args...)
+			runDir := repo
+			switch {
+			case tt.nonGit:
+				runDir = t.TempDir()
+			case tt.linked:
+				// Run from a linked worktree whose backlog holds the seed
+				// content plus one extra idea (so the happy path has something
+				// to move and the seed ID collides with the main backlog).
+				run(t, repo, "git", "commit", "--allow-empty", "-m", "seed")
+				runDir = filepath.Join(t.TempDir(), "linked")
+				run(t, repo, "git", "worktree", "add", runDir)
+				if err := os.MkdirAll(filepath.Join(runDir, "fab"), 0755); err != nil {
+					t.Fatal(err)
+				}
+				writeRepoBacklog(t, runDir, content+"- [ ] [cd34] 2026-06-02: worktree-only idea\n")
+			}
+
+			_, _, err := runSplit(t, bin, runDir, tt.args...)
 			if got := exitCodeOf(t, err); got != tt.wantExit {
 				t.Errorf("exit code = %d, want %d", got, tt.wantExit)
 			}

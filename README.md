@@ -94,6 +94,7 @@ Queries (the `<id>` arg on `show`, `done`, `reopen`, `edit`, `rm`) match against
 | `idea reopen <query>` | Reopen a completed idea. |
 | `idea edit <query> "text"` | Replace an idea's description. |
 | `idea rm <query> --yes` | Delete an idea (requires `--yes`/`-y` — or the equivalent `--force` — to confirm; `--dry-run` previews the match without deleting). |
+| `idea promote <query>` | Move an idea to the main worktree's backlog (ID, date, and status preserved; refuses on ID collision). |
 | `idea update` | Self-update via Homebrew. |
 
 Run `idea <command> --help` for inline flag details, browse the [full command reference](https://shll.ai/idea/commands/) on shll.ai, or see [`docs/specs/overview.md`](https://github.com/sahil87/idea/blob/main/docs/specs/overview.md) for the full CLI reference and [`docs/specs/backlog-format.md`](https://github.com/sahil87/idea/blob/main/docs/specs/backlog-format.md) for the file format contract.

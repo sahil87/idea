@@ -16,7 +16,7 @@ src/
   cmd/
     idea/                      # cobra entry point; one file per subcommand
       main.go                  # newRootCmd() factory + main()
-      add.go list.go show.go done.go reopen.go edit.go rm.go prune.go fmt.go resolve.go update.go shell_init.go
+      add.go list.go show.go done.go reopen.go edit.go rm.go prune.go promote.go fmt.go resolve.go update.go shell_init.go
       output.go                # printIdeaLines: the single TTY-aware list/prune render path
       help_dump.go             # hidden "help-dump" subcommand (CLI tree → JSON)
       skill.go                 # visible "skill" subcommand: prints the embedded agent usage bundle (//go:embed)
@@ -30,6 +30,8 @@ src/
       editor_test.go
       fmt.go                   # idea fmt: Fmt/FmtResult + bare-checkbox adoption
       fmt_test.go
+      promote.go               # idea promote: Promote — current→main worktree move, dest-first ordering
+      promote_test.go
       stale.go                 # staleness seam: --stale duration parsing (ParseStaleDays), IsStale predicate, dim constants
       stale_test.go
       term.go                  # TTY/width/color/truncation seam (DisplayListLine)
@@ -255,7 +257,7 @@ func (u *usageError) Unwrap() error { return u.err }
 **Two seams tag every usage error** — because cobra's `SetFlagErrorFunc` catches flag-parse errors but **not** arg-count errors (verified at 9uh7), a complete implementation must tag both; a flag-only partial would make the usage-error classes disagree (flags→2, arg-count→1):
 
 1. **Flag-error seam** — one `root.SetFlagErrorFunc(func(cmd, err) error { return &usageError{err} })` registered in `newRootCmd()`. Cobra inherits `FlagErrorFunc` from the parent, so every subcommand is covered without per-command wiring. `idea --nope` and `idea list --bogus` exit 2 (message unchanged).
-2. **Arg-validation seam** — each subcommand's `Args` validator is wrapped by the `usageArgs(v cobra.PositionalArgs) cobra.PositionalArgs` helper (also in `main.go`), which classifies a rejection as a `usageError`. Applied at all **12** wrappable `Args:` sites: `add`/`reopen`/`show` (`cobra.ExactArgs(1)`), `done`/`rm` (`cobra.MinimumNArgs(1)` — one-or-more `<query>...`; zero positionals exits 2), `edit` (`cobra.RangeArgs(1,2)`), `fmt`/`prune`/`update`/`help-dump`/`skill` (`cobra.NoArgs`), and `list`'s custom validator func. Root and `shell-init` use `cobra.ArbitraryArgs` — nothing to wrap. **Every new subcommand's `Args:` validator MUST be wrapped in `usageArgs(...)`** — an unwrapped validator silently regresses that command's usage errors to exit 1.
+2. **Arg-validation seam** — each subcommand's `Args` validator is wrapped by the `usageArgs(v cobra.PositionalArgs) cobra.PositionalArgs` helper (also in `main.go`), which classifies a rejection as a `usageError`. Applied at all **13** wrappable `Args:` sites: `add`/`reopen`/`show`/`promote` (`cobra.ExactArgs(1)`), `done`/`rm` (`cobra.MinimumNArgs(1)` — one-or-more `<query>...`; zero positionals exits 2), `edit` (`cobra.RangeArgs(1,2)`), `fmt`/`prune`/`update`/`help-dump`/`skill` (`cobra.NoArgs`), and `list`'s custom validator func. Root and `shell-init` use `cobra.ArbitraryArgs` — nothing to wrap. **Every new subcommand's `Args:` validator MUST be wrapped in `usageArgs(...)`** — an unwrapped validator silently regresses that command's usage errors to exit 1.
 
 **The mapping** lives once in `main()`: keep the `errSilent` `ERROR:`-skip, then `code := 1; var uerr *usageError; if errors.As(err, &uerr) { code = 2 }; os.Exit(code)`.
 
@@ -329,7 +331,7 @@ This is the single source for the shll.ai command-reference: the `help-dump` sub
 ```go
 root.AddCommand(
     addCmd(), listCmd(), showCmd(), doneCmd(), reopenCmd(),
-    editCmd(), rmCmd(), pruneCmd(), fmtCmd(), updateCmd(), skillCmd(), newShellInitCmd(), helpDumpCmd(),
+    editCmd(), rmCmd(), pruneCmd(), promoteCmd(), fmtCmd(), updateCmd(), skillCmd(), newShellInitCmd(), helpDumpCmd(),
 )
 ```
 
@@ -348,7 +350,7 @@ The factory exists so the live cobra tree can be constructed in two places off t
 **Routing rule (load-bearing).** Cobra resolves subcommand names **and aliases** before the root `RunE` bare-text fallback fires. Two consequences:
 
 1. Without the alias, `idea ls` would not error — it would fall through to the bare-text shorthand and silently append a junk idea with the text "ls". The alias closes that footgun.
-2. Every alias permanently removes a word from the start of bare-text idea capture (`idea <text>` → `idea add <text>`). Adding an alias is therefore a **namespace decision, not a convenience decision** — any word claimed as an alias can never again begin an idea typed bare. The same holds for **subcommand names** themselves: the `prune` verb claims `prune` from the bare-text namespace (260612-drc1) — `idea prune the old cache` routes to the subcommand (and errors under its `cobra.NoArgs`) instead of capturing an idea beginning with "prune"; `fmt` was accepted on the same bar ("fmt" plausibly never begins bare idea prose; 260612-4m3a).
+2. Every alias permanently removes a word from the start of bare-text idea capture (`idea <text>` → `idea add <text>`). Adding an alias is therefore a **namespace decision, not a convenience decision** — any word claimed as an alias can never again begin an idea typed bare. The same holds for **subcommand names** themselves: the `prune` verb claims `prune` from the bare-text namespace (260612-drc1) — `idea prune the old cache` routes to the subcommand (and errors under its `cobra.NoArgs`) instead of capturing an idea beginning with "prune"; `fmt` was accepted on the same bar ("fmt" plausibly never begins bare idea prose; 260612-4m3a); `promote` likewise claims `promote` (260816-kmti) — `idea promote the blog post` routes to the subcommand and errors under its `cobra.ExactArgs(1)` (see [promote](/cli/promote.md)).
 
 **Rejected aliases** (surveyed and rejected in the 04rt intake discussion; future proposals must clear the same bar): `remove`/`delete` (rm), `upgrade` (update), `cat` (show) — each plausibly starts bare-text idea prose; `undo` (reopen) — implies revert-last-action semantics worth reserving. Scope decision: `ls` is the only alias.
 
@@ -425,6 +427,7 @@ This wiring is required because `idea` is released independently:
 - Self-update subcommand built on top of the Homebrew tap (`update.go` / `internal/idea/update.go`): `update.md`.
 - `idea list`/`ls` TTY-aware rendering contract — truncation, `--full`, the `[id...]` filter, the `--stale` age filter, color, and whole-line age dimming (`list.go` / `internal/idea/term.go` / `internal/idea/stale.go`): `list.md`.
 - Bulk-remove subcommand (`prune.go` / `idea.Prune`): dry-run/`--force` contract, the count header + interactive `[y/N]` confirm, output channels, and the deliberate non-archival design: `prune.md`.
+- Move subcommand (`promote.go` / `idea.Promote`): current→main worktree move, destination-first write ordering, collision refusal, same-path no-op, and flag-conflict contract: [promote](/cli/promote.md).
 - `edit` subcommand two-form contract and the `$VISUAL`/`$EDITOR`/`vi` temp-file round trip (`edit.go` / `internal/idea/editor.go`): `edit.md`.
 - `skill` subcommand — the embedded agent usage bundle, its static-only/stdout/exit contract, and the sync + drift-guard mechanism (`skill.go` / `scripts/sync-skill.sh` / `docs/site/skill.md`): `skill.md`.
 - Constitution principles III and IV: `fab/project/constitution.md`.
