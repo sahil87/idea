@@ -671,11 +671,11 @@ func TestDone_MarkOpen(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	i, _, err := Done(path, "a7k2")
+	i, _, err := Done(path, []string{"a7k2"})
 	if err != nil {
 		t.Fatalf("Done: %v", err)
 	}
-	if !i.Done {
+	if !i[0].Done {
 		t.Error("idea should be done after Done()")
 	}
 
@@ -692,7 +692,7 @@ func TestDone_AlreadyDone(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, _, err := Done(path, "a7k2")
+	_, _, err := Done(path, []string{"a7k2"})
 	if err == nil {
 		t.Fatal("expected error when marking already-done idea as done")
 	}
@@ -815,12 +815,12 @@ func TestRm_WithForce(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	removed, _, err := Rm(path, "a7k2", true)
+	removed, _, err := Rm(path, []string{"a7k2"}, true)
 	if err != nil {
 		t.Fatalf("Rm: %v", err)
 	}
-	if removed.ID != "a7k2" {
-		t.Errorf("removed ID = %q, want a7k2", removed.ID)
+	if removed[0].ID != "a7k2" {
+		t.Errorf("removed ID = %q, want a7k2", removed[0].ID)
 	}
 
 	data, _ := os.ReadFile(path)
@@ -838,7 +838,7 @@ func TestRm_WithoutForce(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, _, err := Rm(path, "a7k2", false)
+	_, _, err := Rm(path, []string{"a7k2"}, false)
 	if err == nil {
 		t.Fatal("expected error without consent")
 	}
@@ -858,7 +858,7 @@ Footer
 `
 	path := writeBacklog(t, dir, content)
 
-	_, _, err := Rm(path, "a7k2", true)
+	_, _, err := Rm(path, []string{"a7k2"}, true)
 	if err != nil {
 		t.Fatalf("Rm: %v", err)
 	}
@@ -906,11 +906,11 @@ func TestRmPreview(t *testing.T) {
 			before, _ := os.ReadFile(path)
 			beforeStr := string(before)
 
-			got, err := RmPreview(path, tt.query)
+			got, err := RmPreview(path, []string{tt.query})
 
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("RmPreview(%q): expected error, got idea %q", tt.query, got.ID)
+					t.Fatalf("RmPreview(%q): expected error, got idea %q", tt.query, got[0].ID)
 				}
 				if tt.wantErrSub != "" && !strings.Contains(err.Error(), tt.wantErrSub) {
 					t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErrSub)
@@ -919,8 +919,8 @@ func TestRmPreview(t *testing.T) {
 				if err != nil {
 					t.Fatalf("RmPreview(%q): unexpected error: %v", tt.query, err)
 				}
-				if got.ID != tt.wantID {
-					t.Errorf("previewed ID = %q, want %q", got.ID, tt.wantID)
+				if got[0].ID != tt.wantID {
+					t.Errorf("previewed ID = %q, want %q", got[0].ID, tt.wantID)
 				}
 			}
 
@@ -1030,7 +1030,7 @@ func TestDone_PreservesOtherIdeas(t *testing.T) {
 `
 	path := writeBacklog(t, dir, content)
 
-	_, _, err := Done(path, "a7k2")
+	_, _, err := Done(path, []string{"a7k2"})
 	if err != nil {
 		t.Fatalf("Done: %v", err)
 	}
@@ -1374,15 +1374,15 @@ func TestDone_BackfillsAndCanonicalizes(t *testing.T) {
 	// Capture today before Done backfills/saves, so a midnight rollover between
 	// the save and the assertions cannot flake the test.
 	today := time.Now().Format("2006-01-02")
-	i, backfilled, err := Done(path, "rk7t")
+	i, backfilled, err := Done(path, []string{"rk7t"})
 	if err != nil {
 		t.Fatalf("Done: %v", err)
 	}
 	if backfilled != 1 {
 		t.Errorf("backfilled = %d, want 1", backfilled)
 	}
-	if i.Date != today {
-		t.Errorf("returned idea Date = %q, want today %q", i.Date, today)
+	if i[0].Date != today {
+		t.Errorf("returned idea Date = %q, want today %q", i[0].Date, today)
 	}
 	data, _ := os.ReadFile(path)
 	want := "- [x] [rk7t] " + today + ": Tune the README-extraction reporter\n"
@@ -1462,7 +1462,7 @@ func TestSaveFile_ShapeBPreservedVerbatim(t *testing.T) {
 	path := writeBacklog(t, dir, content)
 
 	// Mutate a different (real) idea, forcing a save.
-	_, _, err := Done(path, "a7k2")
+	_, _, err := Done(path, []string{"a7k2"})
 	if err != nil {
 		t.Fatalf("Done: %v", err)
 	}
@@ -1485,7 +1485,7 @@ func TestSaveFile_PreservesNonIdeaLinesByteForByte(t *testing.T) {
 	content := "# Backlog\n\nIntro prose paragraph.\n\n- [ ] [a7k2] 2025-06-15: First\n- [ ] [c3d4] 2025-06-10: Second\n\nFooter line\n"
 	path := writeBacklog(t, dir, content)
 
-	_, _, err := Done(path, "a7k2")
+	_, _, err := Done(path, []string{"a7k2"})
 	if err != nil {
 		t.Fatalf("Done: %v", err)
 	}
@@ -1730,7 +1730,7 @@ func TestRm_MultilineIdea_NoOrphans(t *testing.T) {
 	if _, err := Add(path, "first line\n\nsecond paragraph\n- [ ] looks like a task", "ab12", ""); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
-	if _, _, err := Rm(path, "ab12", true); err != nil {
+	if _, _, err := Rm(path, []string{"ab12"}, true); err != nil {
 		t.Fatalf("Rm: %v", err)
 	}
 
@@ -1758,7 +1758,7 @@ func TestLegacyBackslash_NormalizeOnWrite(t *testing.T) {
 	}
 
 	// First mutating save: on-disk encoding canonicalizes to doubled backslash.
-	if _, _, err := Done(path, "a7k2"); err != nil {
+	if _, _, err := Done(path, []string{"a7k2"}); err != nil {
 		t.Fatalf("Done: %v", err)
 	}
 	data, _ := os.ReadFile(path)
@@ -1780,7 +1780,7 @@ func TestLegacyBackslash_NormalizeOnWrite(t *testing.T) {
 	if _, _, err := Reopen(path, "a7k2"); err != nil {
 		t.Fatalf("Reopen: %v", err)
 	}
-	if _, _, err := Done(path, "a7k2"); err != nil {
+	if _, _, err := Done(path, []string{"a7k2"}); err != nil {
 		t.Fatalf("Done: %v", err)
 	}
 	data, _ = os.ReadFile(path)
@@ -2000,5 +2000,298 @@ func TestResolveBacklogPath_MainErrorsOutOfGit(t *testing.T) {
 
 	if _, err := ResolveBacklogPath(false, true, ""); err == nil {
 		t.Fatal("expected --main to error outside a git repo, got nil")
+	}
+}
+
+// --- Batch query tests (multi-query Done / Rm / RmPreview) ---
+
+// TestDone_Batch pins the all-or-nothing multi-query contract of Done: a happy
+// batch marks every matched open idea done with one save; a batch containing a
+// no-match or ambiguous query aborts with that query's usual error and leaves
+// the file byte-untouched; and duplicate queries resolving to one idea act
+// once. Table-driven against real temp dirs (Constitution V).
+func TestDone_Batch(t *testing.T) {
+	tests := []struct {
+		name    string
+		seed    string
+		queries []string
+		// wantIDs: IDs of the acted ideas, in first-occurrence (argument) order.
+		wantIDs []string
+		// wantErrSub: expected error substring; when set, the file must be
+		// byte-identical after the call.
+		wantErrSub string
+		// wantDone / wantOpen: status assertions against the saved file.
+		wantDone []string
+		wantOpen []string
+	}{
+		{
+			name: "happy batch marks all matched ideas done",
+			seed: "- [ ] [a7k2] 2025-06-15: Add dark mode\n" +
+				"- [ ] [x9m1] 2025-06-16: Fix auth-cleanup redirect\n" +
+				"- [ ] [c3d4] 2025-06-17: Third idea\n",
+			queries:  []string{"a7k2", "auth-cleanup"},
+			wantIDs:  []string{"a7k2", "x9m1"},
+			wantDone: []string{"a7k2", "x9m1"},
+			wantOpen: []string{"c3d4"},
+		},
+		{
+			name: "mixed valid and ambiguous batch aborts untouched",
+			seed: "- [ ] [a7k2] 2025-06-15: Add dark mode\n" +
+				"- [ ] [c3d4] 2025-06-16: Add light mode\n" +
+				"- [ ] [x9m1] 2025-06-17: Third idea\n",
+			queries:    []string{"a7k2", "mode", "x9m1"},
+			wantErrSub: "Multiple matches:",
+		},
+		{
+			name: "mixed valid and no-match batch aborts untouched",
+			seed: "- [ ] [a7k2] 2025-06-15: Add dark mode\n" +
+				"- [ ] [x9m1] 2025-06-16: Third idea\n",
+			queries:    []string{"a7k2", "zzzz"},
+			wantErrSub: "No idea matching 'zzzz'",
+		},
+		{
+			name: "duplicate queries resolving to one idea act once",
+			seed: "- [ ] [a7k2] 2025-06-15: Rework the auth flow\n" +
+				"- [ ] [x9m1] 2025-06-16: Third idea\n",
+			queries:  []string{"a7k2", "auth"},
+			wantIDs:  []string{"a7k2"},
+			wantDone: []string{"a7k2"},
+			wantOpen: []string{"x9m1"},
+		},
+		{
+			name: "FilterOpen excludes already-done ideas from batch resolution",
+			seed: "- [ ] [a7k2] 2025-06-15: Add dark mode\n" +
+				"- [x] [x9m1] 2025-06-16: Already done idea\n",
+			queries:    []string{"a7k2", "x9m1"},
+			wantErrSub: "No idea matching 'x9m1'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := writeBacklog(t, dir, tt.seed)
+			before, _ := os.ReadFile(path)
+
+			acted, _, err := Done(path, tt.queries)
+
+			if tt.wantErrSub != "" {
+				if err == nil {
+					t.Fatalf("Done(%v): expected error containing %q, got acted %v", tt.queries, tt.wantErrSub, acted)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErrSub)
+				}
+				after, _ := os.ReadFile(path)
+				if string(after) != string(before) {
+					t.Errorf("failed batch must leave the file byte-identical\nbefore:\n%s\nafter:\n%s", before, after)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Done(%v): unexpected error: %v", tt.queries, err)
+			}
+			if len(acted) != len(tt.wantIDs) {
+				t.Fatalf("acted count = %d, want %d", len(acted), len(tt.wantIDs))
+			}
+			for i, wantID := range tt.wantIDs {
+				if acted[i].ID != wantID {
+					t.Errorf("acted[%d].ID = %q, want %q (argument order)", i, acted[i].ID, wantID)
+				}
+				if !acted[i].Done {
+					t.Errorf("acted[%d] (%q) should be done", i, wantID)
+				}
+			}
+
+			data, _ := os.ReadFile(path)
+			got := string(data)
+			for _, id := range tt.wantDone {
+				if !strings.Contains(got, "- [x] ["+id+"]") {
+					t.Errorf("idea %q should be done; file:\n%s", id, got)
+				}
+			}
+			for _, id := range tt.wantOpen {
+				if !strings.Contains(got, "- [ ] ["+id+"]") {
+					t.Errorf("idea %q should remain open; file:\n%s", id, got)
+				}
+			}
+		})
+	}
+}
+
+// TestRm_Batch pins the batch removal contract: non-adjacent indices are
+// removed correctly (descending-order removal), duplicate queries act once and
+// the returned ideas follow first-occurrence order, and any failing query
+// aborts the whole batch with the file byte-untouched.
+func TestRm_Batch(t *testing.T) {
+	tests := []struct {
+		name    string
+		queries []string
+		// wantIDs: removed ideas in first-occurrence (argument) order.
+		wantIDs []string
+		// gone / kept: ID assertions against the saved file.
+		gone []string
+		kept []string
+		// wantErrSub: expected error substring; the file stays byte-identical.
+		wantErrSub string
+	}{
+		{
+			name:    "non-adjacent indices remove the correct lines",
+			queries: []string{"aaaa", "dddd"},
+			wantIDs: []string{"aaaa", "dddd"},
+			gone:    []string{"aaaa", "dddd"},
+			kept:    []string{"bbbb", "cccc"},
+		},
+		{
+			name:    "duplicate queries act once and keep argument order",
+			queries: []string{"aaaa", "first", "dddd"},
+			wantIDs: []string{"aaaa", "dddd"},
+			gone:    []string{"aaaa", "dddd"},
+			kept:    []string{"bbbb", "cccc"},
+		},
+		{
+			name:       "mixed valid and no-match aborts untouched",
+			queries:    []string{"aaaa", "zzzz"},
+			wantErrSub: "No idea matching 'zzzz'",
+		},
+		{
+			name:       "ambiguous query aborts untouched",
+			queries:    []string{"aaaa", "idea"},
+			wantErrSub: "Multiple matches:",
+		},
+	}
+
+	const seed = "- [ ] [aaaa] 2025-06-15: first idea\n" +
+		"- [ ] [bbbb] 2025-06-16: second idea\n" +
+		"- [x] [cccc] 2025-06-17: third idea\n" +
+		"- [ ] [dddd] 2025-06-18: fourth idea\n"
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := writeBacklog(t, dir, seed)
+			before, _ := os.ReadFile(path)
+
+			removed, _, err := Rm(path, tt.queries, true)
+
+			if tt.wantErrSub != "" {
+				if err == nil {
+					t.Fatalf("Rm(%v): expected error containing %q, got removed %v", tt.queries, tt.wantErrSub, removed)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErrSub)
+				}
+				after, _ := os.ReadFile(path)
+				if string(after) != string(before) {
+					t.Errorf("failed batch must leave the file byte-identical\nbefore:\n%s\nafter:\n%s", before, after)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Rm(%v): unexpected error: %v", tt.queries, err)
+			}
+			if len(removed) != len(tt.wantIDs) {
+				t.Fatalf("removed count = %d, want %d", len(removed), len(tt.wantIDs))
+			}
+			for i, wantID := range tt.wantIDs {
+				if removed[i].ID != wantID {
+					t.Errorf("removed[%d].ID = %q, want %q (argument order)", i, removed[i].ID, wantID)
+				}
+			}
+
+			data, _ := os.ReadFile(path)
+			got := string(data)
+			for _, id := range tt.gone {
+				if strings.Contains(got, "["+id+"]") {
+					t.Errorf("idea %q should be gone; file:\n%s", id, got)
+				}
+			}
+			for _, id := range tt.kept {
+				if !strings.Contains(got, "["+id+"]") {
+					t.Errorf("idea %q should be kept; file:\n%s", id, got)
+				}
+			}
+		})
+	}
+}
+
+// TestRm_BatchConsentRefusal: without consent Rm refuses before resolving
+// anything — even a batch of valid queries removes nothing.
+func TestRm_BatchConsentRefusal(t *testing.T) {
+	dir := t.TempDir()
+	content := "- [ ] [a7k2] 2025-06-15: Add dark mode\n- [ ] [x9m1] 2025-06-16: Third idea\n"
+	path := writeBacklog(t, dir, content)
+
+	_, _, err := Rm(path, []string{"a7k2", "x9m1"}, false)
+	if err == nil {
+		t.Fatal("expected refusal without consent")
+	}
+	if !strings.Contains(err.Error(), "Use --yes (or --force)") {
+		t.Errorf("error = %q", err.Error())
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != content {
+		t.Errorf("consent refusal must leave the file byte-identical:\n%s", string(data))
+	}
+}
+
+// TestRmPreview_Batch: the multi-query preview resolves every query on the
+// live match path, returns all would-be-removed ideas in argument order, and
+// never writes — a failing query aborts the preview with the same error the
+// live delete would give.
+func TestRmPreview_Batch(t *testing.T) {
+	const seed = "- [ ] [a7k2] 2025-06-15: Add dark mode\n" +
+		"- [x] [c3d4] 2025-06-16: Fix dark redirect\n" +
+		"- [ ] [x9m1] 2025-06-17: Third idea\n"
+
+	tests := []struct {
+		name       string
+		queries    []string
+		wantIDs    []string
+		wantErrSub string
+	}{
+		{name: "previews all matches including done ideas", queries: []string{"a7k2", "c3d4"}, wantIDs: []string{"a7k2", "c3d4"}},
+		{name: "duplicate queries preview once", queries: []string{"x9m1", "Third"}, wantIDs: []string{"x9m1"}},
+		{name: "no-match query aborts the preview", queries: []string{"a7k2", "zzzz"}, wantErrSub: "No idea matching 'zzzz'"},
+		{name: "ambiguous query aborts the preview like the live delete", queries: []string{"dark"}, wantErrSub: "Multiple matches:"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := writeBacklog(t, dir, seed)
+			before, _ := os.ReadFile(path)
+
+			got, err := RmPreview(path, tt.queries)
+
+			if tt.wantErrSub != "" {
+				if err == nil {
+					t.Fatalf("RmPreview(%v): expected error containing %q", tt.queries, tt.wantErrSub)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErrSub)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("RmPreview(%v): unexpected error: %v", tt.queries, err)
+				}
+				if len(got) != len(tt.wantIDs) {
+					t.Fatalf("preview count = %d, want %d", len(got), len(tt.wantIDs))
+				}
+				for i, wantID := range tt.wantIDs {
+					if got[i].ID != wantID {
+						t.Errorf("preview[%d].ID = %q, want %q (argument order)", i, got[i].ID, wantID)
+					}
+				}
+			}
+
+			// Preview MUST never write: the file is byte-identical in every case.
+			after, _ := os.ReadFile(path)
+			if string(after) != string(before) {
+				t.Errorf("RmPreview wrote the file; want byte-identical.\nbefore:\n%s\nafter:\n%s", before, after)
+			}
+		})
 	}
 }

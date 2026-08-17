@@ -565,6 +565,30 @@ func RequireSingle(query string, ideas []Idea, filter FilterKind) (Idea, int, er
 	return matches[0], indices[0], nil
 }
 
+// resolveMany resolves every query independently via RequireSingle (same
+// case-insensitive substring matching, same exact-ID precedence, same filter,
+// same error wording) against the already-loaded file, and returns the
+// resolved ideas-slice indices. Any no-match or ambiguous query aborts the
+// whole batch with that query's error — all-or-nothing, before any mutation.
+// Indices are deduped (two queries resolving to the same idea act on it once)
+// preserving first-occurrence order; callers needing the dedupe count derive
+// it as len(queries) - len(indices).
+func resolveMany(f *File, queries []string, filter FilterKind) ([]int, error) {
+	seen := make(map[int]bool, len(queries))
+	indices := make([]int, 0, len(queries))
+	for _, query := range queries {
+		_, idx, err := RequireSingle(query, f.ideas, filter)
+		if err != nil {
+			return nil, err
+		}
+		if !seen[idx] {
+			seen[idx] = true
+			indices = append(indices, idx)
+		}
+	}
+	return indices, nil
+}
+
 func matchesFilter(idea Idea, filter FilterKind) bool {
 	switch filter {
 	case FilterOpen:
@@ -777,26 +801,38 @@ func Show(path, query string) (Idea, error) {
 	return idea, nil
 }
 
-// Done marks a single matching open idea as done. The returned count is the
-// number of previously-dateless ideas whose date was backfilled to today on save
-// (a side effect of normalize-on-write); the cmd layer surfaces it on stderr.
-func Done(path, query string) (Idea, int, error) {
+// Done marks every matching open idea as done in one pass: the file is loaded
+// once, all queries resolve up front (all-or-nothing — a failing query leaves
+// the backlog untouched), each resolved idea is flipped, and a single SaveFile
+// performs the write. Queries resolving to the same idea act once; acted ideas
+// are returned in first-occurrence (argument) order. The returned count is the
+// number of previously-dateless ideas whose date was backfilled to today on
+// save (a side effect of normalize-on-write); the cmd layer surfaces it on
+// stderr at most once.
+func Done(path string, queries []string) ([]Idea, int, error) {
 	f, err := LoadFile(path)
 	if err != nil {
-		return Idea{}, 0, err
+		return nil, 0, err
 	}
 
-	_, idx, err := RequireSingle(query, f.ideas, FilterOpen)
+	indices, err := resolveMany(f, queries, FilterOpen)
 	if err != nil {
-		return Idea{}, 0, err
+		return nil, 0, err
 	}
 
-	f.ideas[idx].Done = true
+	for _, idx := range indices {
+		f.ideas[idx].Done = true
+	}
 	backfilled, err := SaveFile(f, path)
 	if err != nil {
-		return Idea{}, 0, err
+		return nil, 0, err
 	}
-	return f.ideas[idx], backfilled, nil
+
+	acted := make([]Idea, len(indices))
+	for i, idx := range indices {
+		acted[i] = f.ideas[idx]
+	}
+	return acted, backfilled, nil
 }
 
 // Reopen marks a single matching done idea as open. See Done for the count.
@@ -877,49 +913,71 @@ func Edit(path, query, newText, newID, newDate string) (Idea, int, error) {
 	return f.ideas[idx], backfilled, nil
 }
 
-// Rm removes a single matching idea from the file. See Done for the count.
-func Rm(path, query string, force bool) (Idea, int, error) {
+// Rm removes every matching idea from the file in one pass: the consent check
+// runs first, then all queries resolve up front (all-or-nothing — a failing
+// query leaves the backlog untouched) and are removed via the removeIdeaAt
+// seam in descending index order so earlier removals cannot invalidate later
+// indices, and a single SaveFile performs the write. Queries resolving to the
+// same idea act once; removed ideas are returned in first-occurrence
+// (argument) order. See Done for the meaning of the returned count.
+func Rm(path string, queries []string, force bool) ([]Idea, int, error) {
 	if !force {
-		return Idea{}, 0, fmt.Errorf("Use --yes (or --force) to confirm deletion")
+		return nil, 0, fmt.Errorf("Use --yes (or --force) to confirm deletion")
 	}
 
 	f, err := LoadFile(path)
 	if err != nil {
-		return Idea{}, 0, err
+		return nil, 0, err
 	}
 
-	_, idx, err := RequireSingle(query, f.ideas, FilterAll)
+	indices, err := resolveMany(f, queries, FilterAll)
 	if err != nil {
-		return Idea{}, 0, err
+		return nil, 0, err
 	}
 
-	removed := f.ideas[idx]
-	removeIdeaAt(f, idx)
+	removed := make([]Idea, len(indices))
+	for i, idx := range indices {
+		removed[i] = f.ideas[idx]
+	}
+
+	// Descending order keeps every pending index valid: removeIdeaAt shifts
+	// only the entries after the removed one.
+	descending := make([]int, len(indices))
+	copy(descending, indices)
+	sort.Sort(sort.Reverse(sort.IntSlice(descending)))
+	for _, idx := range descending {
+		removeIdeaAt(f, idx)
+	}
 
 	backfilled, err := SaveFile(f, path)
 	if err != nil {
-		return Idea{}, 0, err
+		return nil, 0, err
 	}
 	return removed, backfilled, nil
 }
 
-// RmPreview resolves the idea a matching Rm would remove WITHOUT writing the
-// file — the accurate, no-op preview backing `idea rm --dry-run`. It shares the
-// exact match path Rm uses (LoadFile + RequireSingle over FilterAll), so an
-// ambiguous or unmatched query is refused identically to the live delete; the
-// dry-run therefore can never drift from the live behavior. No consent is
-// required (a preview is non-destructive) and nothing is ever written.
-func RmPreview(path, query string) (Idea, error) {
+// RmPreview resolves the ideas a matching Rm would remove WITHOUT writing the
+// file — the accurate, no-op preview backing `idea rm --dry-run`. It shares
+// the exact match path Rm uses (LoadFile + resolveMany over FilterAll), so a
+// failing query is refused identically to the live delete; the dry-run
+// therefore can never drift from the live behavior. No consent is required (a
+// preview is non-destructive) and nothing is ever written.
+func RmPreview(path string, queries []string) ([]Idea, error) {
 	f, err := LoadFile(path)
 	if err != nil {
-		return Idea{}, err
+		return nil, err
 	}
 
-	match, _, err := RequireSingle(query, f.ideas, FilterAll)
+	indices, err := resolveMany(f, queries, FilterAll)
 	if err != nil {
-		return Idea{}, err
+		return nil, err
 	}
-	return match, nil
+
+	matches := make([]Idea, len(indices))
+	for i, idx := range indices {
+		matches[i] = f.ideas[idx]
+	}
+	return matches, nil
 }
 
 // removeIdeaAt removes the idea at index idx from the file's bookkeeping —

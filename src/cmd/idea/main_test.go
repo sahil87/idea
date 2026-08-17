@@ -1672,3 +1672,211 @@ func TestExitCodes_UsageVsOperationalVsSuccess(t *testing.T) {
 		})
 	}
 }
+
+// TestBatchDoneRm_CLI pins the batch-query CLI contract for `done` and `rm`:
+// per-item stdout lines in argument order, dedupe advisory on stderr with
+// stdout kept clean, batch --dry-run previewing all matches while writing
+// nothing (and winning over --yes), batch consent refusal exiting 1, zero-arg
+// invocations exiting 2, and a single backfill advisory per batch save.
+func TestBatchDoneRm_CLI(t *testing.T) {
+	bin := buildBinary(t)
+
+	const seed = "# Backlog\n\n" +
+		"- [ ] [a7k2] 2026-01-01: Add dark mode\n" +
+		"- [ ] [x9m1] 2026-01-02: Fix auth-cleanup redirect\n" +
+		"- [ ] [c3d4] 2026-01-03: Third idea\n"
+
+	tests := []struct {
+		name string
+		args []string
+		// wantExit is the expected process exit code.
+		wantExit int
+		// stdoutLines: the exact full stdout, split into lines, when non-nil.
+		stdoutLines []string
+		// stdoutHas / stderrHas: required substrings.
+		stdoutHas []string
+		stderrHas []string
+		// stdoutLacks / stderrLacks: forbidden substrings.
+		stdoutLacks []string
+		stderrLacks []string
+		// gone / kept: ID assertions against the saved backlog.
+		gone []string
+		kept []string
+		// unchanged: the backlog must be byte-identical to the seed.
+		unchanged bool
+	}{
+		{
+			name: "done batch prints per-item lines in argument order",
+			args: []string{"done", "x9m1", "a7k2"},
+			stdoutLines: []string{
+				"Done: - [x] [x9m1] 2026-01-02: Fix auth-cleanup redirect",
+				"Done: - [x] [a7k2] 2026-01-01: Add dark mode",
+			},
+			kept: []string{"c3d4"},
+		},
+		{
+			name:        "done batch dedupe advises on stderr only",
+			args:        []string{"done", "a7k2", "dark"},
+			wantExit:    0,
+			stdoutHas:   []string{"Done: - [x] [a7k2]"},
+			stderrHas:   []string{"note: 1 duplicate query(ies) matched an already-selected idea; acted once"},
+			stdoutLacks: []string{"note:"},
+		},
+		{
+			name:      "done batch with ambiguous query aborts untouched",
+			args:      []string{"done", "a7k2", "i"},
+			wantExit:  1,
+			stderrHas: []string{"Multiple matches:"},
+			unchanged: true,
+		},
+		{
+			name:      "done batch with no-match query aborts untouched",
+			args:      []string{"done", "a7k2", "zzzz"},
+			wantExit:  1,
+			stderrHas: []string{"No idea matching 'zzzz'"},
+			unchanged: true,
+		},
+		{
+			name: "rm batch removes all with one consent flag",
+			args: []string{"rm", "x9m1", "a7k2", "--yes"},
+			stdoutLines: []string{
+				"Removed: - [ ] [x9m1] 2026-01-02: Fix auth-cleanup redirect",
+				"Removed: - [ ] [a7k2] 2026-01-01: Add dark mode",
+			},
+			gone: []string{"a7k2", "x9m1"},
+			kept: []string{"c3d4"},
+		},
+		{
+			name:      "rm batch without consent refuses and removes nothing",
+			args:      []string{"rm", "a7k2", "x9m1"},
+			wantExit:  1,
+			stderrHas: []string{"Use --yes (or --force) to confirm deletion"},
+			unchanged: true,
+		},
+		{
+			name: "rm batch --dry-run previews all and writes nothing",
+			args: []string{"rm", "a7k2", "x9m1", "--dry-run"},
+			stdoutLines: []string{
+				"- [ ] [a7k2] 2026-01-01: Add dark mode",
+				"- [ ] [x9m1] 2026-01-02: Fix auth-cleanup redirect",
+			},
+			unchanged: true,
+		},
+		{
+			name:      "rm batch --dry-run wins over --yes",
+			args:      []string{"rm", "a7k2", "x9m1", "--dry-run", "--yes"},
+			stdoutHas: []string{"a7k2", "x9m1"},
+			unchanged: true,
+		},
+		{
+			name:        "rm batch --dry-run with no-match aborts with no preview lines",
+			args:        []string{"rm", "a7k2", "zzzz", "--dry-run"},
+			wantExit:    1,
+			stderrHas:   []string{"No idea matching 'zzzz'"},
+			stdoutLacks: []string{"a7k2"},
+			unchanged:   true,
+		},
+		{
+			name:     "done with zero args exits 2",
+			args:     []string{"done"},
+			wantExit: 2,
+		},
+		{
+			name:     "rm with zero args exits 2",
+			args:     []string{"rm"},
+			wantExit: 2,
+		},
+		{
+			name:     "single-arg done stays byte-identical",
+			args:     []string{"done", "a7k2"},
+			wantExit: 0,
+			stdoutLines: []string{
+				"Done: - [x] [a7k2] 2026-01-01: Add dark mode",
+			},
+			stderrLacks: []string{"note:"},
+			kept:        []string{"x9m1", "c3d4"},
+		},
+		{
+			name:      "single-arg rm refusal wording unchanged",
+			args:      []string{"rm", "a7k2"},
+			wantExit:  1,
+			stderrHas: []string{"Use --yes (or --force) to confirm deletion"},
+			unchanged: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			writeRepoBacklog(t, repo, seed)
+
+			stdout, stderr, err := runSplit(t, bin, repo, tt.args...)
+			if got := exitCodeOf(t, err); got != tt.wantExit {
+				t.Errorf("exit code = %d, want %d\nstdout=%q stderr=%q", got, tt.wantExit, stdout, stderr)
+			}
+
+			if tt.stdoutLines != nil {
+				want := strings.Join(tt.stdoutLines, "\n") + "\n"
+				if stdout != want {
+					t.Errorf("stdout:\ngot:  %q\nwant: %q", stdout, want)
+				}
+			}
+			for _, want := range tt.stdoutHas {
+				if !strings.Contains(stdout, want) {
+					t.Errorf("stdout missing %q; got:\n%s", want, stdout)
+				}
+			}
+			for _, want := range tt.stderrHas {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("stderr missing %q; got:\n%s", want, stderr)
+				}
+			}
+			for _, bad := range tt.stdoutLacks {
+				if strings.Contains(stdout, bad) {
+					t.Errorf("stdout must not contain %q; got:\n%s", bad, stdout)
+				}
+			}
+			for _, bad := range tt.stderrLacks {
+				if strings.Contains(stderr, bad) {
+					t.Errorf("stderr must not contain %q; got:\n%s", bad, stderr)
+				}
+			}
+
+			got := readRepoBacklog(t, repo)
+			if tt.unchanged && got != seed {
+				t.Errorf("backlog must be byte-identical after %v; got:\n%s", tt.args, got)
+			}
+			for _, id := range tt.gone {
+				if strings.Contains(got, "["+id+"]") {
+					t.Errorf("idea %q should be gone after %v; backlog:\n%s", id, tt.args, got)
+				}
+			}
+			for _, id := range tt.kept {
+				if !strings.Contains(got, "["+id+"]") {
+					t.Errorf("idea %q should be kept after %v; backlog:\n%s", id, tt.args, got)
+				}
+			}
+		})
+	}
+}
+
+// TestDone_BatchSingleBackfillNotice: one batch save produces exactly one
+// backfill advisory on stderr (single canonical write), with the count
+// covering every dateless idea normalized by that save.
+func TestDone_BatchSingleBackfillNotice(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+
+	writeRepoBacklog(t, repo, "- [ ] [rk7t] dateless one\n- [ ] [c3d4] dateless two\n")
+
+	stdout, stderr, err := runSplit(t, bin, repo, "done", "rk7t", "c3d4")
+	if err != nil {
+		t.Fatalf("done failed: %v\nstdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if got := strings.Count(stderr, "note: stamped today's date on 2 previously-dateless item(s)"); got != 1 {
+		t.Errorf("backfill notice count = %d, want exactly 1; stderr=%q", got, stderr)
+	}
+	if got := strings.Count(stdout, "Done: "); got != 2 {
+		t.Errorf("stdout should carry 2 Done: lines, got %d; stdout=%q", got, stdout)
+	}
+}
