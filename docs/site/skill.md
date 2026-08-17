@@ -24,7 +24,7 @@ selectors below and the persistent `-f/--file` override.
 |---------|------|
 | `idea add <text>` | Append a new idea (generated 4-char ID + today's date). `--id`/`--date` override. |
 | `idea <text>` | Bare-text shorthand for `add` — any first word that is not a subcommand/alias. |
-| `idea list` / `ls` | List ideas (open by default; `--all/-a`, `--done`, `[id...]` filter, `--sort`, `--reverse`, `--full`, `--json`). |
+| `idea list` / `ls` | List ideas (open by default; `--all/-a`, `--done`, `[id...]` filter, `--sort`, `--reverse`, `--full`, `--json`, `--stale N[d]` for open ideas older than N days). |
 | `idea show <query>` | Show one matching idea (`--json` for the record). |
 | `idea done <query>` | Mark a matching open idea done. |
 | `idea reopen <query>` | Re-open a matching done idea. |

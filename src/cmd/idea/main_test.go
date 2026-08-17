@@ -828,6 +828,204 @@ func TestList_PipedOutputIsCanonical(t *testing.T) {
 	}
 }
 
+// TestList_Stale covers the --stale filter end to end: strictly-older-than
+// filtering against a fixed-date backlog (both "90d" and bare "90"), open-only
+// semantics (mutual exclusion with --done/--all exits 2), composition with the
+// [id...] positional filter and --sort/--reverse, piped output staying
+// canonical FormatLine bytes, and invalid values exiting 2 as usage errors.
+func TestList_Stale(t *testing.T) {
+	bin := buildBinary(t)
+
+	// All fixture dates are fixed and far from any plausible "today" (far past
+	// for stale, far future for fresh) so the seeded backlog never depends on
+	// the test process and the binary agreeing on the wall clock — the two call
+	// time.Now() independently, and today-relative fixtures would flake across
+	// a midnight boundary. The exact same-day boundary semantics are pinned by
+	// the internal/idea unit tests, which inject a fixed clock.
+	seed := "# Backlog\n\n" +
+		"- [ ] [old1] 2020-01-01: ancient one\n" +
+		"- [ ] [old2] 2019-06-01: ancient two\n" +
+		"- [ ] [new1] 2099-01-01: far-future fresh idea\n" +
+		"- [x] [d0ne] 2018-01-01: done ancient\n"
+
+	// Default sort is date ascending, so the stale set is old2 (2019) then
+	// old1 (2020).
+	const staleDateOrder = "- [ ] [old2] 2019-06-01: ancient two\n" +
+		"- [ ] [old1] 2020-01-01: ancient one\n"
+
+	tests := []struct {
+		name       string
+		backlog    string // overrides seed when non-empty
+		args       []string
+		wantStdout string
+		wantStderr []string // required stderr substrings
+		noStdout   []string // forbidden stdout substrings
+		noStderr   []string // forbidden stderr substrings
+		wantExit   int      // 0 means success
+	}{
+		{
+			name:       "90d filters to strictly-older open ideas",
+			args:       []string{"list", "--stale", "90d"},
+			wantStdout: staleDateOrder,
+			noStdout:   []string{"new1", "d0ne"},
+		},
+		{
+			name:       "bare 90 parses like 90d",
+			args:       []string{"ls", "--stale", "90"},
+			wantStdout: staleDateOrder,
+		},
+		{
+			name: "--sort id applies to the filtered set",
+			args: []string{"list", "--stale", "90d", "--sort", "id"},
+			wantStdout: "- [ ] [old1] 2020-01-01: ancient one\n" +
+				"- [ ] [old2] 2019-06-01: ancient two\n",
+		},
+		{
+			name: "--reverse applies to the filtered set",
+			args: []string{"list", "--stale", "90d", "--reverse"},
+			wantStdout: "- [ ] [old1] 2020-01-01: ancient one\n" +
+				"- [ ] [old2] 2019-06-01: ancient two\n",
+		},
+		{
+			name:       "id filter intersects; existing-but-fresh id warns nothing",
+			args:       []string{"ls", "old1", "new1", "--stale", "30d"},
+			wantStdout: "- [ ] [old1] 2020-01-01: ancient one\n",
+			noStdout:   []string{"new1"},
+			noStderr:   []string{"new1"},
+		},
+		{
+			name:       "absent id still warns under --stale",
+			args:       []string{"ls", "old1", "zzzz", "--stale", "30d"},
+			wantStdout: "- [ ] [old1] 2020-01-01: ancient one\n",
+			wantStderr: []string{`no idea with ID "zzzz"`},
+		},
+		{
+			name:       "piped --stale output is canonical bytes",
+			backlog:    "- [ ] [long] 2020-01-01: " + strings.Repeat("x", 300) + "\n",
+			args:       []string{"list", "--stale", "90d"},
+			wantStdout: "- [ ] [long] 2020-01-01: " + strings.Repeat("x", 300) + "\n",
+		},
+		{
+			name:       "zero threshold keeps everything older than today",
+			args:       []string{"list", "--stale", "0"},
+			wantStdout: staleDateOrder,
+			noStdout:   []string{"new1", "d0ne"},
+		},
+		{
+			name:       "--stale with --done is a usage error",
+			args:       []string{"list", "--stale", "90d", "--done"},
+			wantStderr: []string{"--stale cannot be combined"},
+			wantExit:   2,
+		},
+		{
+			name:       "--stale with --all is a usage error",
+			args:       []string{"list", "--stale", "90d", "--all"},
+			wantStderr: []string{"--stale cannot be combined"},
+			wantExit:   2,
+		},
+		{
+			name:       "garbage value is a usage error",
+			args:       []string{"list", "--stale", "abc"},
+			wantStderr: []string{"invalid stale duration"},
+			wantExit:   2,
+		},
+		{
+			name:       "negative value is a usage error",
+			args:       []string{"list", "--stale=-5"},
+			wantStderr: []string{"invalid stale duration"},
+			wantExit:   2,
+		},
+		{
+			name:       "non-day unit is a usage error",
+			args:       []string{"list", "--stale", "90h"},
+			wantStderr: []string{"invalid stale duration"},
+			wantExit:   2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := setupGitRepo(t)
+			content := seed
+			if tt.backlog != "" {
+				content = tt.backlog
+			}
+			writeRepoBacklog(t, repo, content)
+
+			stdout, stderr, err := runSplit(t, bin, repo, tt.args...)
+			if got := exitCodeOf(t, err); got != tt.wantExit {
+				t.Fatalf("exit code = %d, want %d\nstdout=%q stderr=%q", got, tt.wantExit, stdout, stderr)
+			}
+
+			if tt.wantStdout != "" && stdout != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			for _, sub := range tt.wantStderr {
+				if !strings.Contains(stderr, sub) {
+					t.Errorf("stderr %q missing %q", stderr, sub)
+				}
+			}
+			for _, sub := range tt.noStdout {
+				if strings.Contains(stdout, sub) {
+					t.Errorf("stdout %q should not contain %q", stdout, sub)
+				}
+			}
+			for _, sub := range tt.noStderr {
+				if strings.Contains(stderr, sub) {
+					t.Errorf("stderr %q should not contain %q", stderr, sub)
+				}
+			}
+			// The subprocess is piped, so output must be canonical: no ANSI,
+			// no ellipsis truncation (Constitution VI pipe contract).
+			if strings.Contains(stdout, "\033[") || strings.Contains(stdout, "…") {
+				t.Errorf("piped output leaked ANSI/ellipsis: %q", stdout)
+			}
+		})
+	}
+}
+
+// TestList_StaleJSON verifies --stale composes with --json: same
+// {id,date,status,text} schema, only the stale rows.
+func TestList_StaleJSON(t *testing.T) {
+	bin := buildBinary(t)
+	repo := setupGitRepo(t)
+	// Fixed far-past/far-future dates keep the fixture independent of the wall
+	// clock (see TestList_Stale's seed comment).
+	writeRepoBacklog(t, repo, "# Backlog\n\n"+
+		"- [ ] [old1] 2020-01-01: ancient idea\n"+
+		"- [ ] [new1] 2099-01-01: far-future fresh idea\n"+
+		"- [x] [d0ne] 2018-01-01: done ancient\n")
+
+	stdout, _, err := runSplit(t, bin, repo, "list", "--stale", "90d", "--json")
+	if err != nil {
+		t.Fatalf("list --stale --json failed: %v", err)
+	}
+
+	var records []struct {
+		ID     string `json:"id"`
+		Date   string `json:"date"`
+		Status string `json:"status"`
+		Text   string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &records); err != nil {
+		t.Fatalf("decode --json output: %v\noutput=%q", err, stdout)
+	}
+	if len(records) != 1 || records[0].ID != "old1" {
+		t.Errorf("--stale --json records = %+v, want exactly [old1]", records)
+	}
+	if records[0].Status != "open" {
+		t.Errorf("status = %q, want %q", records[0].Status, "open")
+	}
+	// Schema field order is part of the public contract (Constitution VI).
+	idIdx := strings.Index(stdout, `"id"`)
+	dateIdx := strings.Index(stdout, `"date"`)
+	statusIdx := strings.Index(stdout, `"status"`)
+	textIdx := strings.Index(stdout, `"text"`)
+	if !(0 < idIdx && idIdx < dateIdx && dateIdx < statusIdx && statusIdx < textIdx) {
+		t.Errorf("json field order broken in %q (want id,date,status,text)", stdout)
+	}
+}
+
 // TestPrune_CountHeaderAndDecisionMatrix covers feature B (the leading stderr
 // count header) and the non-TTY rows of the feature E decision matrix. The
 // subprocess pipes stdout (never a TTY), so: no-force prints the header + the
