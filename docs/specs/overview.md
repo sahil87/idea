@@ -55,7 +55,10 @@ In all rooted cases an absolute `--file`/`IDEAS_FILE` value is used verbatim.
 | `idea edit <query> "text"` | Replace an idea's text inline |
 | `idea rm <query> --yes` | Delete an idea (requires `--yes`/`-y` or the equivalent `--force` to confirm; `--dry-run` previews the match without deleting) |
 | `idea prune [--yes]` | Bulk-remove all done ideas (dry run by default; `--yes`/`-y` or `--force` to delete) |
+| `idea promote <query>` | Move an idea from the current worktree's backlog to the main worktree's backlog |
 | `idea fmt` | Rewrite the backlog into canonical form, adopting bare checkbox lines (`--check` reports without writing) |
+
+**Promote semantics** (`idea promote <query>`): the move preserves the idea's ID, date, and open/done status verbatim; the destination (main worktree) is written before the source (current worktree), so a crash mid-move duplicates the idea rather than losing it. An ID collision in the destination refuses the move with an operational error (exit 1) naming the ID — the ID is never re-minted — and leaves both files untouched. Run from the main worktree (or whenever source and destination resolve to the same file), promote is a no-op: nothing is written, a `note:` advisory goes to stderr, and the exit code is 0. `--main` and `--system` are usage errors with promote (exit 2) — promote defines its own source and destination; `--file`/`IDEAS_FILE` apply within each root. Outside a git repository promote fails operationally (`not in a git repository`, exit 1).
 
 **Editor form contract** (`idea edit <query>`, no text argument): an unchanged buffer is a no-op — the backlog is untouched, a `note: text unchanged — nothing to do` advisory goes to stderr, and the exit code is 0. An emptied buffer is refused: no change, non-zero exit. A non-zero editor exit aborts: the backlog is untouched, non-zero exit. Passing `--id`/`--date` with the no-text form still opens the editor, applies the metadata at save, and suppresses the unchanged no-op — a metadata-only change lands without mutating the text.
 

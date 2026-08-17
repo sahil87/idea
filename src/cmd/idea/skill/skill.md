@@ -31,6 +31,7 @@ selectors below and the persistent `-f/--file` override.
 | `idea edit <query> [new-text]` | Replace text inline, or open `$VISUAL`/`$EDITOR`/`vi` when text is omitted. `--id`/`--date` too. |
 | `idea rm <query>` | Delete one idea. Needs consent: `--yes/-y` (or `--force`). `--dry-run` previews, writes nothing. |
 | `idea prune` | Bulk-remove all done ideas. Bare run is a dry run; `--yes/-y`/`--force` confirms. |
+| `idea promote <query>` | Move an idea to the main worktree's backlog (ID/date/status preserved; refuses on ID collision). `--main`/`--system` are rejected — promote picks its own roots. |
 | `idea fmt` | Rewrite the backlog into canonical form (and adopt bare `- [ ]` checkboxes). `--check` gates without writing. |
 | `idea update` | Self-update the binary via Homebrew. |
 

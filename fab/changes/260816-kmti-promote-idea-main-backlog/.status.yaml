@@ -1,0 +1,57 @@
+id: kmti
+name: 260816-kmti-promote-idea-main-backlog
+created: 2026-08-16T20:39:27Z
+created_by: sahil-noon
+change_type: feat
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: done
+    review-pr: done
+plan:
+    generated: true
+    task_count: 10
+    acceptance_count: 16
+    acceptance_completed: 16
+confidence:
+    certain: 7
+    confident: 6
+    tentative: 0
+    unresolved: 0
+    score: 4.3
+    fuzzy: true
+    dimensions:
+        signal: 74.2
+        reversibility: 86.5
+        competence: 82.3
+        disambiguation: 78.8
+stage_metrics:
+    intake: {started_at: "2026-08-16T20:39:27Z", driver: fab-new, iterations: 1, completed_at: "2026-08-16T20:42:33Z"}
+    apply: {started_at: "2026-08-16T20:42:33Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T20:57:16Z"}
+    review: {started_at: "2026-08-16T20:57:16Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T21:01:50Z"}
+    hydrate: {started_at: "2026-08-16T21:01:50Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T21:07:07Z"}
+    ship: {started_at: "2026-08-16T21:07:07Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T21:09:14Z"}
+    review-pr: {started_at: "2026-08-16T21:09:14Z", driver: git-pr, iterations: 1, completed_at: "2026-08-16T21:15:30Z"}
+prs:
+    - https://github.com/sahil87/idea/pull/45
+change_type_source: explicit
+true_impact:
+    added: 1153
+    deleted: 5
+    net: 1148
+    excluding:
+        added: 698
+        deleted: 1
+        net: 697
+    tests:
+        added: 540
+        deleted: 1
+        net: 539
+    computed_at: "2026-08-16T21:09:14Z"
+    computed_at_stage: ship
+summary: Added idea promote <query> — moves an idea from the current worktree's backlog to the main worktree's backlog, preserving id/date/status, with destination-first writes and collision refusal
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-08-16T21:15:30Z
